@@ -100,7 +100,7 @@ missing scraped data degrades gracefully.
 
 - [x] 1. Data model + client onboarding (profile, brand kit, URL auto-scrape) — **done**
 - [x] 2. Analysis pipeline (scrape → enrich → aggregate; pre-cache med-spa demo corpus) — **done**
-- [ ] 3. Generation (brief assembly → variants along axes → critique/score → render-specs)
+- [x] 3. Generation (brief assembly → variants along axes → critique/score → render-specs) — **done**
 - [ ] 4. Rendering (Satori templates × standard sizes + RSA assembly; live preview)
 - [ ] 5. Campaign assembly (smart-default config + editable review UI)
 - [ ] 6. Application shell & dashboard (agency dashboard, state-grouped campaign list, detail, controls, insights)
@@ -108,7 +108,7 @@ missing scraped data degrades gracefully.
 - [ ] 8. Demo polish (end-to-end agency → med-spa narrative)
 
 Phases 1–4 are the differentiated core and are demoable before publishing is wired.
-**Current phase: 3 (variant generation).** Update the checkboxes as phases complete.
+**Current phase: 4 (rendering).** Update the checkboxes as phases complete.
 
 ### Phase 1 — what landed (for future sessions)
 - pnpm monorepo: `apps/web` (Next 14 App Router + Tailwind), `packages/shared` (Zod), `infra/supabase`.
@@ -124,6 +124,14 @@ Phases 1–4 are the differentiated core and are demoable before publishing is w
 - Surfaces: `POST /analyze` (FastAPI `gaa_ai.api`) + `gaa-analyze` CLI.
 - Node↔AI wiring: `apps/web/src/lib/ai/client.ts` calls `/analyze`, validates against the Zod `AnalysisObject`; `POST /api/clients/:id/analyze` persists to `analyses` + audits; `/clients/:id` shows an MVP Insights view (gaps first) with a run button.
 - Local Python on PATH is Anaconda 3.7 — always invoke via `uv run` (uses the 3.12 venv).
+
+### Phase 3 — what landed (for future sessions)
+- Generation in `services/ai/gaa_ai/generation` (built by the ml-systems-engineer agent): `brief` (structured, cache-friendly stable prefix + per-variant suffix; NOT RAG), `generate` (variants along deliberate axes — **gap_opportunities first**, then proven survivor angles; each `Variant` carries `axis` + `insight_ref`), `critique` (rubric + a **deterministic policy hard-gate** that can only downgrade `policy_safe`; failures regenerated ≤2× then dropped). `generate_variants(inp, llm=None)`.
+- Templates are guardrails: display specs must use a `template_id` from `gaa_ai/templates.py::DISPLAY_TEMPLATES` (invalid → coerced). Display authored at 1200x628; renderer fans out in Phase 4. RSA char limits repaired before validation.
+- `RenderSpec` is a discriminated union — for structured output pass the concrete per-format model (`DisplayRenderSpec`/`SearchRenderSpec`), not the union.
+- Surfaces: `POST /generate` (FastAPI). 45 offline tests total, ruff+mypy clean.
+- Node wiring: TS generation mirror in `packages/shared/schemas/generation.ts`; `apps/web/src/lib/ai/client.ts::generateVariants` validates the response; `POST /api/clients/:id/generate` persists to `creatives` + audits; `/clients/:id` shows a Creative Library (text previews — actual rendering is Phase 4).
+- Note: `FakeLlm` returns `model_construct()` for unseeded schemas (invalid → noisy downstream validation logs); seed the exact internal model (e.g. `_CritiqueLlmScore`) in offline proofs.
 
 ---
 

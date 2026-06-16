@@ -10,7 +10,7 @@ import logging
 
 from fastapi import FastAPI, HTTPException
 
-from gaa_ai.schemas import AnalysisInput, AnalysisObject
+from gaa_ai.schemas import AnalysisInput, AnalysisObject, GenerationInput, GenerationResult
 
 logger = logging.getLogger("gaa_ai.api")
 
@@ -32,3 +32,15 @@ def analyze(inp: AnalysisInput) -> AnalysisObject:
     except Exception as exc:  # noqa: BLE001 — surface a clean 502, log the cause
         logger.exception("analysis failed")
         raise HTTPException(status_code=502, detail=f"Analysis failed: {exc}") from exc
+
+
+@app.post("/generate", response_model=GenerationResult)
+def generate(inp: GenerationInput) -> GenerationResult:
+    # Imported lazily so the module loads even before generation is wired.
+    from gaa_ai.generation import generate_variants
+
+    try:
+        return generate_variants(inp)
+    except Exception as exc:  # noqa: BLE001 — surface a clean 502, log the cause
+        logger.exception("generation failed")
+        raise HTTPException(status_code=502, detail=f"Generation failed: {exc}") from exc

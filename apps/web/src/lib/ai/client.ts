@@ -1,5 +1,10 @@
 import "server-only";
-import { AnalysisObject, type ClientProfile } from "@gaa/shared";
+import {
+  AnalysisObject,
+  type ClientProfile,
+  GenerationResult,
+  type StyleSpec,
+} from "@gaa/shared";
 import { serverEnv } from "@/lib/env";
 
 /**
@@ -67,6 +72,75 @@ export async function analyzeCompetitors(
   if (!parsed.success) {
     throw new AiServiceError(
       `AI service returned an invalid analysis object: ${parsed.error.message}`,
+    );
+  }
+  return parsed.data;
+}
+
+const GENERATE_TIMEOUT_MS = 120_000;
+
+/** Derive the compact StyleSpec the generator consumes from the client brand kit. */
+function styleFromClient(client: ClientProfile): StyleSpec {
+  const bk = client.brand_kit;
+  return {
+    palette: bk?.palette ?? null,
+    fonts: bk?.fonts ?? null,
+    tone: bk?.tone ?? null,
+    do_not_use: bk?.do_not_use ?? null,
+  };
+}
+
+export async function generateVariants(
+  client: ClientProfile,
+  analysis: AnalysisObject,
+  opts: { nPerFormat?: number } = {},
+): Promise<GenerationResult> {
+  const { AI_SERVICE_URL } = serverEnv();
+  const payload = {
+    client: {
+      name: client.name,
+      vertical: analysis.vertical,
+      geo: client.geo,
+      website: client.website,
+      competitors: client.competitors ?? null,
+      usp: client.usp ?? null,
+      offerings: client.derived?.offerings ?? null,
+    },
+    analysis,
+    style: styleFromClient(client),
+    formats: ["search", "display"],
+    n_per_format: opts.nPerFormat ?? 3,
+  };
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), GENERATE_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(`${AI_SERVICE_URL}/generate`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    throw new AiServiceError(
+      err instanceof Error && err.name === "AbortError"
+        ? "Generation timed out"
+        : "AI service is unreachable (is it running on AI_SERVICE_URL?)",
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new AiServiceError(`AI service returned ${res.status}: ${detail.slice(0, 300)}`);
+  }
+
+  const parsed = GenerationResult.safeParse(await res.json());
+  if (!parsed.success) {
+    throw new AiServiceError(
+      `AI service returned invalid generation output: ${parsed.error.message}`,
     );
   }
   return parsed.data;

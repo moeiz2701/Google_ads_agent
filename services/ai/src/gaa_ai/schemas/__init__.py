@@ -6,14 +6,30 @@ scraped data degrades gracefully (§10).
 
 from gaa_ai.schemas.analysis import AnalysisObject, CreativeNorms, WinningAngle
 from gaa_ai.schemas.client import AnalysisInput, ClientContext
-from gaa_ai.schemas.common import AdNetwork, ScaleTier, TextDensity
+from gaa_ai.schemas.common import AdFormat, AdNetwork, ScaleTier, TextDensity
 from gaa_ai.schemas.enriched_ad import (
     CreativeAttributes,
     EnrichedAdRecord,
     RawAd,
 )
+from gaa_ai.schemas.generation import (
+    CritiqueScore,
+    GenerationInput,
+    GenerationResult,
+    StyleSpec,
+    Variant,
+)
+from gaa_ai.schemas.render_spec import (
+    DisplayRenderSpec,
+    ImageSpec,
+    RenderSpec,
+    RsaDescription,
+    RsaHeadline,
+    SearchRenderSpec,
+)
 
 __all__ = [
+    "AdFormat",
     "AdNetwork",
     "ScaleTier",
     "TextDensity",
@@ -25,4 +41,15 @@ __all__ = [
     "AnalysisObject",
     "ClientContext",
     "AnalysisInput",
+    "DisplayRenderSpec",
+    "SearchRenderSpec",
+    "RenderSpec",
+    "ImageSpec",
+    "RsaHeadline",
+    "RsaDescription",
+    "StyleSpec",
+    "GenerationInput",
+    "GenerationResult",
+    "CritiqueScore",
+    "Variant",
 ]

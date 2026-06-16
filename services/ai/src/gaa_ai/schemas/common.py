@@ -11,6 +11,24 @@ class AdNetwork(str, Enum):
     youtube = "youtube"
 
 
+class AdFormat(str, Enum):
+    search = "search"
+    display = "display"
+
+
+# Standard Google Display sizes (§5.6). 1200x628 is the authoring size; the
+# renderer (Phase 4) fans out to the rest.
+DISPLAY_SIZES = (
+    "300x250",
+    "336x280",
+    "728x90",
+    "160x600",
+    "320x50",
+    "300x600",
+    "1200x628",
+)
+
+
 class ScaleTier(str, Enum):
     low = "low"
     medium = "medium"

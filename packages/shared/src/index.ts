@@ -15,3 +15,4 @@ export * from "./schemas/analysis-object"; // 3. analysis_object
 export * from "./schemas/render-spec"; // 4. render_spec
 export * from "./schemas/campaign-config"; // 5. campaign_config
 export * from "./schemas/lifecycle";
+export * from "./schemas/generation"; // Module 3 generation IO
