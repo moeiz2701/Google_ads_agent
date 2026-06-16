@@ -1,0 +1,48 @@
+import { z } from "zod";
+
+/**
+ * Brand Kit — the MVP design-language input (§3.3).
+ *
+ * The user provides this (or the system auto-extracts it from the website). It is
+ * applied to pre-built, parameterized templates. The LLM never receives the raw
+ * asset at generation time — only this compact spec.
+ *
+ * Every field nullable so partial auto-extraction degrades gracefully (§10).
+ */
+
+const HexColor = z
+  .string()
+  .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "must be a hex color");
+
+export const BrandPalette = z.object({
+  primary: HexColor.nullable(),
+  accent: HexColor.nullable(),
+  neutral: HexColor.nullable(),
+  text: HexColor.nullable(),
+});
+export type BrandPalette = z.infer<typeof BrandPalette>;
+
+export const BrandFonts = z.object({
+  heading: z.string().nullable(),
+  body: z.string().nullable(),
+});
+export type BrandFonts = z.infer<typeof BrandFonts>;
+
+export const BrandKit = z.object({
+  logo_url: z.string().url().nullable(),
+  palette: BrandPalette.nullable(),
+  fonts: BrandFonts.nullable(),
+  /** e.g. "clinical-reassuring" */
+  tone: z.string().nullable(),
+  /** Optional brand guardrails, e.g. ["before/after imagery", "price-led claims"]. */
+  do_not_use: z.array(z.string()).nullable(),
+});
+export type BrandKit = z.infer<typeof BrandKit>;
+
+export const emptyBrandKit = (): BrandKit => ({
+  logo_url: null,
+  palette: { primary: null, accent: null, neutral: null, text: null },
+  fonts: { heading: null, body: null },
+  tone: null,
+  do_not_use: [],
+});

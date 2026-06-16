@@ -1,0 +1,36 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# builds
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# env / secrets — NEVER commit (Google Ads dev token, OAuth, LLM keys, Supabase)
+.env
+.env.*
+!.env.example
+
+# python (services/ai)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.python-version
+
+# logs / os
+*.log
+.DS_Store
+Thumbs.db
+
+# editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# supabase local
+**/supabase/.branches
+**/supabase/.temp

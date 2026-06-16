@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: 0 0% 100%;
+  --surface: 220 14% 98%;
+  --border: 220 13% 91%;
+  --fg: 222 47% 11%;
+  --muted: 220 9% 46%;
+  --primary: 222 47% 11%;
+  --primary-fg: 0 0% 100%;
+  --danger: 0 72% 51%;
+  --success: 142 71% 45%;
+  --radius: 0.625rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: 222 47% 7%;
+    --surface: 222 30% 11%;
+    --border: 222 20% 20%;
+    --fg: 210 20% 96%;
+    --muted: 220 9% 60%;
+    --primary: 210 20% 96%;
+    --primary-fg: 222 47% 11%;
+  }
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  background: hsl(var(--bg));
+  color: hsl(var(--fg));
+  -webkit-font-smoothing: antialiased;
+}
