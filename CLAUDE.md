@@ -99,7 +99,7 @@ missing scraped data degrades gracefully.
 ## Build phases (MVP — see IMPLEMENTATION.md §13)
 
 - [x] 1. Data model + client onboarding (profile, brand kit, URL auto-scrape) — **done**
-- [ ] 2. Analysis pipeline (scrape → enrich → aggregate; pre-cache med-spa demo corpus)
+- [x] 2. Analysis pipeline (scrape → enrich → aggregate; pre-cache med-spa demo corpus) — **done**
 - [ ] 3. Generation (brief assembly → variants along axes → critique/score → render-specs)
 - [ ] 4. Rendering (Satori templates × standard sizes + RSA assembly; live preview)
 - [ ] 5. Campaign assembly (smart-default config + editable review UI)
@@ -108,7 +108,7 @@ missing scraped data degrades gracefully.
 - [ ] 8. Demo polish (end-to-end agency → med-spa narrative)
 
 Phases 1–4 are the differentiated core and are demoable before publishing is wired.
-**Current phase: 2 (analysis pipeline).** Update the checkboxes as phases complete.
+**Current phase: 3 (variant generation).** Update the checkboxes as phases complete.
 
 ### Phase 1 — what landed (for future sessions)
 - pnpm monorepo: `apps/web` (Next 14 App Router + Tailwind), `packages/shared` (Zod), `infra/supabase`.
@@ -116,7 +116,14 @@ Phases 1–4 are the differentiated core and are demoable before publishing is w
 - LLM provider abstraction at `apps/web/src/lib/llm` (Gemini over REST; factory keyed on `LLM_PROVIDER`). Add new providers there, never inline a vendor SDK.
 - Onboarding: `POST /api/extract` (SSRF-guarded site fetch → HTML summary → LLM Tier-3 extraction) and `POST/GET /api/clients`. UI at `/clients/new`, `/clients`.
 - DB: `infra/supabase/migrations/0001_core_schema.sql` (+ 0002 seed agency). RLS deferred to production; MVP uses the service-role server client. `audit_log` + `logAction()` exist — use them for every mutation.
-- `services/ai` (Python) is **not** scaffolded yet and local Python is 3.7.3 — needs 3.9+ before Phase 2 work that uses LangChain.
+### Phase 2 — what landed (for future sessions)
+- `services/ai` Python service (uv, Python 3.12; `.venv`). Pydantic mirrors of the schemas in `gaa_ai/schemas` — keep in lockstep with `packages/shared`.
+- Provider-abstracted LLM at `gaa_ai/llm` (Gemini via langchain-google-genai; `FakeLlm` for offline tests; `get_llm()` factory).
+- Ad sources at `gaa_ai/scrape`: `CachedAdSource` (demo corpus in `fixtures/med_spa/ads.json`) + `LiveAdSource` (SerpApi fallback + documented Transparency-scraper seam). `get_ad_source(use_cached=...)`.
+- **Map-reduce pipeline** `gaa_ai/pipeline` (built by the ml-systems-engineer agent): `enrich` (MAP) keeps performance-proxy signals deterministic, LLM does interpretation; `aggregate` (REDUCE) ranks winning angles by a **longevity** proxy (NOT frequency — deterministic baseline) and the LLM synthesizes `gap_opportunities`. `run_analysis(inp, llm=None)`. 21 offline tests, ruff+mypy clean.
+- Surfaces: `POST /analyze` (FastAPI `gaa_ai.api`) + `gaa-analyze` CLI.
+- Node↔AI wiring: `apps/web/src/lib/ai/client.ts` calls `/analyze`, validates against the Zod `AnalysisObject`; `POST /api/clients/:id/analyze` persists to `analyses` + audits; `/clients/:id` shows an MVP Insights view (gaps first) with a run button.
+- Local Python on PATH is Anaconda 3.7 — always invoke via `uv run` (uses the 3.12 venv).
 
 ---
 
@@ -157,7 +164,10 @@ pnpm lint               # next lint (web)
 # env: copy .env.example -> apps/web/.env.local and fill in
 #     Supabase URL/keys + GEMINI_API_KEY (minimum to run onboarding).
 
-# ai service (Python) — not scaffolded yet (Phase 2; needs Python 3.9+)
+# ai service (Python) — from services/ai (always via uv; PATH python is 3.7)
+#   uv run uvicorn gaa_ai.api:app --port 8000   # serve /analyze for the Node app
+#   uv run gaa-analyze --vertical med_spa --geo "Los Angeles"   # CLI dry-run
+#   uv run ruff check src tests ; uv run mypy ; uv run pytest -q
 ```
 
 ---

@@ -19,6 +19,8 @@ const serverSchema = z.object({
   GEMINI_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
+  // Python AI service (Module 2 analysis, Module 3 generation).
+  AI_SERVICE_URL: z.string().url().default("http://localhost:8000"),
 });
 
 function parse<T extends z.ZodTypeAny>(schema: T, source: unknown): z.infer<T> {

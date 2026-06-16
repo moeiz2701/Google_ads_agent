@@ -45,17 +45,19 @@ export default async function ClientsPage() {
       ) : (
         <div className="grid gap-3">
           {clients.map((c) => (
-            <Card key={c.client_id} className="flex items-center justify-between">
-              <div>
-                <p className="font-medium">{c.name}</p>
-                <p className="text-sm text-muted">
-                  {c.website} · goal: {c.goal} · {c.geo.join(", ")}
-                </p>
-              </div>
-              <span className="rounded-full border border-border px-2.5 py-0.5 text-xs text-muted">
-                {c.budget.type} ${c.budget.amount}/{c.budget.currency}
-              </span>
-            </Card>
+            <Link key={c.client_id} href={`/clients/${c.client_id}`} className="block">
+              <Card className="flex items-center justify-between transition-colors hover:bg-bg">
+                <div>
+                  <p className="font-medium">{c.name}</p>
+                  <p className="text-sm text-muted">
+                    {c.website} · goal: {c.goal} · {c.geo.join(", ")}
+                  </p>
+                </div>
+                <span className="rounded-full border border-border px-2.5 py-0.5 text-xs text-muted">
+                  {c.budget.type} ${c.budget.amount}/{c.budget.currency}
+                </span>
+              </Card>
+            </Link>
           ))}
         </div>
       )}
