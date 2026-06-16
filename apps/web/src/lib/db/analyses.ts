@@ -26,15 +26,23 @@ export async function saveAnalysis(
 export async function getLatestAnalysis(
   clientId: string,
 ): Promise<AnalysisObject | null> {
+  return (await getLatestAnalysisWithId(clientId))?.analysis ?? null;
+}
+
+/** Latest analysis plus its row id (needed to link a campaign's analysis_id). */
+export async function getLatestAnalysisWithId(
+  clientId: string,
+): Promise<{ id: string; analysis: AnalysisObject } | null> {
   const { data, error } = await getServiceClient()
     .from("analyses")
-    .select("analysis")
+    .select("id, analysis")
     .eq("client_id", clientId)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
   if (error) throw new Error(`Failed to load analysis: ${error.message}`);
   if (!data) return null;
-  const parsed = AnalysisObject.safeParse((data as { analysis: unknown }).analysis);
-  return parsed.success ? parsed.data : null;
+  const row = data as { id: string; analysis: unknown };
+  const parsed = AnalysisObject.safeParse(row.analysis);
+  return parsed.success ? { id: row.id, analysis: parsed.data } : null;
 }

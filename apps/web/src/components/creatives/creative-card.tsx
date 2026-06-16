@@ -1,5 +1,6 @@
 import type { CreativeRecord } from "@/lib/db/creatives";
 import { Card } from "@/components/ui/primitives";
+import { DisplayPreview } from "./display-preview";
 
 /**
  * Text preview of a generated render-spec. Actual pixel rendering (Satori
@@ -45,14 +46,10 @@ export function CreativeCard({ creative }: { creative: CreativeRecord }) {
         </div>
       ) : (
         <div className="space-y-2">
-          <div className="flex aspect-[1200/628] items-center justify-center rounded-md border border-dashed border-border bg-bg text-xs text-muted">
-            {spec.template_id} · {spec.size}
-          </div>
-          <p className="text-sm font-medium">{spec.headline}</p>
-          {spec.subhead && <p className="text-sm text-muted">{spec.subhead}</p>}
-          <span className="inline-block rounded-md bg-primary px-3 py-1 text-xs text-primary-fg">
-            {spec.cta}
-          </span>
+          <DisplayPreview creativeId={creative.id} />
+          <p className="text-xs text-muted">
+            {spec.template_id} · {spec.headline} · CTA: {spec.cta}
+          </p>
         </div>
       )}
     </Card>

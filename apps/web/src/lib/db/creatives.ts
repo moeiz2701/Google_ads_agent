@@ -1,5 +1,5 @@
 import "server-only";
-import { type Variant, RenderSpec } from "@gaa/shared";
+import { type BrandKit, type Variant, BrandKit as BrandKitSchema, RenderSpec } from "@gaa/shared";
 import { z } from "zod";
 import { getServiceClient } from "@/lib/supabase/server";
 
@@ -40,6 +40,30 @@ export async function saveCreatives(
     .insert(rows, { count: "exact" });
   if (error) throw new Error(`Failed to save creatives: ${error.message}`);
   return count ?? rows.length;
+}
+
+/** The data the renderer needs for one creative: its spec + the client brand kit. */
+export async function getCreativeRenderData(
+  creativeId: string,
+): Promise<{ spec: RenderSpec; brandKit: BrandKit | null } | null> {
+  const { data, error } = await getServiceClient()
+    .from("creatives")
+    .select("spec, client:clients(brand_kit)")
+    .eq("id", creativeId)
+    .maybeSingle();
+  if (error) throw new Error(`Failed to load creative: ${error.message}`);
+  if (!data) return null;
+
+  const spec = RenderSpec.safeParse((data as { spec: unknown }).spec);
+  if (!spec.success) throw new Error("Stored creative spec is invalid");
+
+  // Supabase returns the joined row as an object (or array); normalize.
+  const joined = (data as { client: unknown }).client;
+  const clientRow = Array.isArray(joined) ? joined[0] : joined;
+  const bk = BrandKitSchema.safeParse(
+    (clientRow as { brand_kit?: unknown } | null)?.brand_kit,
+  );
+  return { spec: spec.data, brandKit: bk.success ? bk.data : null };
 }
 
 export async function listCreatives(

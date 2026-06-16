@@ -2,37 +2,90 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── KodoAI Editorial Brutalism — token foundation ─────────────────────────
+   Single source of truth for all colours. No HSL. No light theme.
+   Dark-primary always. All components consume these vars, never raw hex.
+   ─────────────────────────────────────────────────────────────────────────── */
 :root {
-  --bg: 0 0% 100%;
-  --surface: 220 14% 98%;
-  --border: 220 13% 91%;
-  --fg: 222 47% 11%;
-  --muted: 220 9% 46%;
-  --primary: 222 47% 11%;
-  --primary-fg: 0 0% 100%;
-  --danger: 0 72% 51%;
-  --success: 142 71% 45%;
-  --radius: 0.625rem;
+  /* Neutrals */
+  --bg: #0c0c0b;
+  --surface: #141412;
+  --surface-2: #1a1a18;
+  --surface-3: #202019;
+  --border: #2a2a26;
+  --border-2: #3a3a34;
+  --ink: #f4f3ee;
+  --ink-2: #c4c2b8;
+  --ink-3: #8a887e;
+  --muted: #5e5c52;
+
+  /* Accent & semantic */
+  --accent: #c8f060;
+  --accent-dim: #6a802e;
+  --green: #6cd86c;
+  --green-bg: #1a2a1a;
+  --amber: #e8a838;
+  --amber-bg: #2a2010;
+  --red: #e85858;
+  --red-bg: #2a1414;
+  --blue: #78b4e8;
+  --blue-bg: #142028;
+
+  /* Typography stacks — loaded by next/font/google in layout.tsx */
+  --display: "Barlow Condensed", Impact, sans-serif;
+  --sans: "IBM Plex Sans", -apple-system, system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: 222 47% 7%;
-    --surface: 222 30% 11%;
-    --border: 222 20% 20%;
-    --fg: 210 20% 96%;
-    --muted: 220 9% 60%;
-    --primary: 210 20% 96%;
-    --primary-fg: 222 47% 11%;
-  }
+/* ─── Base reset ────────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  border-radius: 0 !important; /* brutalist: no rounded corners anywhere */
 }
 
 * {
-  border-color: hsl(var(--border));
+  border-color: var(--border);
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 body {
-  background: hsl(var(--bg));
-  color: hsl(var(--fg));
-  -webkit-font-smoothing: antialiased;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.6;
+  letter-spacing: 0.005em;
+}
+
+/* ─── Focus ring ────────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ─── Scrollbar (subtle, matches dark theme) ───────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-2);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+/* ─── Selection ─────────────────────────────────────────────────────────────── */
+::selection {
+  background: var(--accent-dim);
+  color: var(--ink);
 }

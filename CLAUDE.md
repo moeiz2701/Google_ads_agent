@@ -101,14 +101,14 @@ missing scraped data degrades gracefully.
 - [x] 1. Data model + client onboarding (profile, brand kit, URL auto-scrape) — **done**
 - [x] 2. Analysis pipeline (scrape → enrich → aggregate; pre-cache med-spa demo corpus) — **done**
 - [x] 3. Generation (brief assembly → variants along axes → critique/score → render-specs) — **done**
-- [ ] 4. Rendering (Satori templates × standard sizes + RSA assembly; live preview)
-- [ ] 5. Campaign assembly (smart-default config + editable review UI)
-- [ ] 6. Application shell & dashboard (agency dashboard, state-grouped campaign list, detail, controls, insights)
+- [x] 4. Rendering (Satori templates × standard sizes + RSA assembly; live preview) — **done**
+- [x] 5. Campaign assembly (smart-default config + editable review UI) — **done**
+- [x] 6. Application shell & dashboard (agency dashboard, state-grouped campaign list, detail, controls, insights) — **done**
 - [ ] 7. Approval + execution (deterministic layer → Google Ads test-account integration)
 - [ ] 8. Demo polish (end-to-end agency → med-spa narrative)
 
 Phases 1–4 are the differentiated core and are demoable before publishing is wired.
-**Current phase: 4 (rendering).** Update the checkboxes as phases complete.
+**Current phase: 7 (approval + execution) — BLOCKED on user providing Google Ads TEST creds.** Update the checkboxes as phases complete.
 
 ### Phase 1 — what landed (for future sessions)
 - pnpm monorepo: `apps/web` (Next 14 App Router + Tailwind), `packages/shared` (Zod), `infra/supabase`.
@@ -132,6 +132,19 @@ Phases 1–4 are the differentiated core and are demoable before publishing is w
 - Surfaces: `POST /generate` (FastAPI). 45 offline tests total, ruff+mypy clean.
 - Node wiring: TS generation mirror in `packages/shared/schemas/generation.ts`; `apps/web/src/lib/ai/client.ts::generateVariants` validates the response; `POST /api/clients/:id/generate` persists to `creatives` + audits; `/clients/:id` shows a Creative Library (text previews — actual rendering is Phase 4).
 - Note: `FakeLlm` returns `model_construct()` for unseeded schemas (invalid → noisy downstream validation logs); seed the exact internal model (e.g. `_CritiqueLlmScore`) in offline proofs.
+
+### Phase 4 — what landed (for future sessions)
+- Deterministic Display rendering in `apps/web/src/lib/render`: `sizes.ts` (7 standard sizes + per-size layout profiles), `palette.ts` (brand-kit colors + WCAG-legible fg + gradient fallback), `fonts.ts` (bundled Inter TTFs — Satori needs raw font bytes), `stock.ts` (Unsplash→Pexels→null with brand-color fallback; works with NO keys), `templates/` (the 4 `template_id`s as pure Satori JSX + registry; unknown id → `bold_centered`), `render.tsx`.
+- **Rendering uses `satori` + `@resvg/resvg-js` directly, NOT `next/og`** — the bundled `@vercel/og` default-font loader is broken on Windows+pnpm (`ERR_INVALID_URL` on `noto-sans...ttf`). `@resvg/resvg-js` is a native addon → it MUST be in `next.config.mjs` `experimental.serverComponentsExternalPackages` or webpack mis-bundles the `.node` binary.
+- One render-spec → PNG at any `DisplaySize` via `GET /api/creatives/:id/render?size=` (Node runtime). Verified at runtime: all 4 templates render valid PNGs at correct dims across billboard/rectangle/skyscraper/leaderboard/small-banner.
+- UI: `DisplayPreview` (client) shows the rendered PNG with a size selector in the Creative Library; Search creatives still show as RSA text (no canvas). App-router gotcha: `_`-prefixed route folders are PRIVATE (404).
+- Stock/logo remote images are best-effort; with no stock keys every creative still renders (brand gradient). Logo embedding deferred (broken remote URLs would fail Satori).
+
+### Phase 5 — what landed (for future sessions)
+- **Deterministic** campaign assembly in `apps/web/src/lib/campaign/assemble.ts` (NON-LLM): `assembleCampaign(profile, analysis, creatives)` → smart-default `CampaignConfig`. Budget copied VERBATIM from the profile (LLM never sets it). Goal→Smart-Bidding map (`bidStrategyForGoal`); ad groups themed by each creative's `insight_ref` (or analysis angles if none yet); keyword_seed distributed across groups (every seed used once); default negatives.
+- Vitest added to `apps/web` (`pnpm test`; config aliases `@gaa/shared`+`@`). `assemble.test.ts` locks budget-verbatim, bid map, insight grouping, keyword distribution, schema validity (8 tests).
+- DB: `lib/db/campaigns.ts` (save/list/get/update + updateStatus). API: `POST /api/clients/:id/campaigns` (assemble draft + audit), `GET/PATCH /api/campaigns/:id`. **Budget cap re-enforced server-side in PATCH** against the client profile (never trust the client).
+- UI: editable configure-by-exception review at `/campaigns/:id` (`CampaignReview`): campaign settings, budget slider with visible cap, per-ad-group keyword/match-type/negatives editing, variant on/off toggles, "what will launch" summary. `AssembleButton` + campaigns list on the client page. Approval/launch is Phase 7.
 
 ---
 
@@ -165,6 +178,7 @@ pnpm dev                # run the Next.js app (apps/web) on :3000
 pnpm build              # build all packages (next build for web)
 pnpm typecheck          # tsc --noEmit across workspaces
 pnpm lint               # next lint (web)
+pnpm --filter @gaa/web test   # vitest (deterministic logic, e.g. campaign assembly)
 
 # DB: apply infra/supabase/migrations/*.sql to your Supabase project
 #     (SQL editor or `supabase db push`). Run 0001 then 0002.
