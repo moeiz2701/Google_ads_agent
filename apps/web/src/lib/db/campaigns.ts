@@ -1,6 +1,7 @@
 import "server-only";
 import { CampaignConfig, type CampaignStatus } from "@gaa/shared";
 import { getServiceClient } from "@/lib/supabase/server";
+import type { LaunchResult } from "@/lib/google-ads";
 
 /** Persistence for campaign_config (§6.2) + lifecycle status (§9.2). */
 
@@ -116,6 +117,27 @@ export async function updateCampaignStatus(
     .update({ status })
     .eq("id", id);
   if (error) throw new Error(`Failed to update status: ${error.message}`);
+}
+
+/**
+ * Record a successful launch (Module 5): set the post-launch status, stamp
+ * launched_at, and persist the published Google Ads resource names + warnings.
+ * Single write so status and provenance can't diverge. No secrets in `result`.
+ */
+export async function markLaunched(
+  id: string,
+  status: CampaignStatus,
+  result: LaunchResult,
+): Promise<void> {
+  const { error } = await getServiceClient()
+    .from("campaigns")
+    .update({
+      status,
+      launched_at: new Date().toISOString(),
+      published_resources: result,
+    })
+    .eq("id", id);
+  if (error) throw new Error(`Failed to mark campaign launched: ${error.message}`);
 }
 
 /**

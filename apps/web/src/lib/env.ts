@@ -21,6 +21,19 @@ const serverSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   // Python AI service (Module 2 analysis, Module 3 generation).
   AI_SERVICE_URL: z.string().url().default("http://localhost:8000"),
+
+  // Google Ads (Module 5 execution; MVP = TEST account). All optional — when any
+  // is missing the execution layer falls back to the mock client.
+  GOOGLE_ADS_DEVELOPER_TOKEN: z.string().optional(),
+  GOOGLE_ADS_CLIENT_ID: z.string().optional(),
+  GOOGLE_ADS_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_ADS_REFRESH_TOKEN: z.string().optional(),
+  GOOGLE_ADS_LOGIN_CUSTOMER_ID: z.string().optional(),
+  // Force the mock client even when creds are present (safe demos / CI).
+  GOOGLE_ADS_USE_MOCK: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((v) => v === "true"),
 });
 
 function parse<T extends z.ZodTypeAny>(schema: T, source: unknown): z.infer<T> {

@@ -125,15 +125,7 @@ export function CampaignControls({
         </Button>
       )}
 
-      {/* Approve & Launch — disabled in Phase 7 */}
-      <Button
-        variant="primary"
-        size="sm"
-        disabled
-        title="Approval and Google Ads test-account publishing is wired in Phase 7"
-      >
-        Approve &amp; Launch
-      </Button>
+      {/* Approve & Launch lives in <ApproveLaunch> (rendered by the detail page). */}
 
       {error && (
         <p role="alert" className="font-mono text-[11px] tracking-[0.05em] text-red">

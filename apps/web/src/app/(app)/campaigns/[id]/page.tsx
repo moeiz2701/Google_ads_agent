@@ -5,6 +5,7 @@ import { getClientProfile } from "@/lib/db/clients";
 import { listRecentActivity } from "@/lib/db/dashboard";
 import { CampaignReview } from "@/components/campaign/campaign-review";
 import { CampaignControls } from "@/components/campaign/campaign-controls";
+import { ApproveLaunch } from "@/components/campaign/approve-launch";
 import { StatusBadge } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +40,13 @@ export default async function CampaignDetailPage({
 
   const budgetCap = client?.budget.amount ?? campaign.budget.amount;
   const campaignActivity = allActivity.filter((a) => a.campaign_id === params.id);
+  const enabledAds = campaign.ad_groups.reduce(
+    (n, g) => n + g.ads.filter((a) => a.enabled).length,
+    0,
+  );
+  const isLaunched = ["scheduled", "running", "paused", "completed"].includes(
+    campaign.status,
+  );
 
   const overviewItems = [
     { label: "Objective", value: campaign.objective },
@@ -93,10 +101,20 @@ export default async function CampaignDetailPage({
             </p>
           </div>
         </div>
-        <CampaignControls
-          campaignId={campaign.campaign_id}
-          currentStatus={campaign.status}
-        />
+        <div className="flex flex-wrap items-center gap-3">
+          <CampaignControls
+            campaignId={campaign.campaign_id}
+            currentStatus={campaign.status}
+          />
+          <ApproveLaunch
+            campaignId={campaign.campaign_id}
+            status={campaign.status}
+            budget={campaign.budget}
+            budgetCap={budgetCap}
+            networks={campaign.networks}
+            enabledAds={enabledAds}
+          />
+        </div>
       </div>
 
       {/* Overview */}
@@ -143,10 +161,12 @@ export default async function CampaignDetailPage({
         </h2>
         <div className="border border-dashed border-border-2 px-6 py-10 text-center">
           <p className="font-display text-[22px] font-[700] uppercase text-ink-3 mb-2">
-            Metrics Once Launched
+            {isLaunched ? "Live On Test Account" : "Metrics Once Launched"}
           </p>
-          <p className="font-mono text-[12px] tracking-[0.05em] text-ink-3 max-w-sm mx-auto">
-            {"// Performance data (impressions, clicks, CTR, conversions) will appear here once this campaign is published to the Google Ads test account in Phase 7."}
+          <p className="font-mono text-[12px] tracking-[0.05em] text-ink-3 max-w-md mx-auto">
+            {isLaunched
+              ? "// Published to the Google Ads TEST account. Test accounts don't serve or report metrics, so performance is empty by design. The longevity feedback loop (Module 6) — feeding realized results back into analysis — activates with production serving."
+              : "// Approve & Launch to create this campaign on the Google Ads test account. Test accounts create real objects but never spend or report metrics; live performance + the feedback loop are a production feature (Module 6)."}
           </p>
         </div>
       </section>

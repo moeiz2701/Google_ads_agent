@@ -104,11 +104,12 @@ missing scraped data degrades gracefully.
 - [x] 4. Rendering (Satori templates × standard sizes + RSA assembly; live preview) — **done**
 - [x] 5. Campaign assembly (smart-default config + editable review UI) — **done**
 - [x] 6. Application shell & dashboard (agency dashboard, state-grouped campaign list, detail, controls, insights) — **done**
-- [ ] 7. Approval + execution (deterministic layer → Google Ads test-account integration)
+- [x] 7. Approval + execution (deterministic layer → Google Ads test-account integration) — **done (mock-first; real path needs live test-account verification)**
 - [ ] 8. Demo polish (end-to-end agency → med-spa narrative)
 
 Phases 1–4 are the differentiated core and are demoable before publishing is wired.
-**Current phase: 7 (approval + execution) — BLOCKED on user providing Google Ads TEST creds.** Update the checkboxes as phases complete.
+**Current phase: 8 (demo polish). All 7 build modules are implemented.** The real Google Ads
+publish path is built but UNVERIFIED against a live test account (see Phase 7 notes). Update the checkboxes as phases complete.
 
 ### Phase 1 — what landed (for future sessions)
 - pnpm monorepo: `apps/web` (Next 14 App Router + Tailwind), `packages/shared` (Zod), `infra/supabase`.
@@ -145,6 +146,32 @@ Phases 1–4 are the differentiated core and are demoable before publishing is w
 - Vitest added to `apps/web` (`pnpm test`; config aliases `@gaa/shared`+`@`). `assemble.test.ts` locks budget-verbatim, bid map, insight grouping, keyword distribution, schema validity (8 tests).
 - DB: `lib/db/campaigns.ts` (save/list/get/update + updateStatus). API: `POST /api/clients/:id/campaigns` (assemble draft + audit), `GET/PATCH /api/campaigns/:id`. **Budget cap re-enforced server-side in PATCH** against the client profile (never trust the client).
 - UI: editable configure-by-exception review at `/campaigns/:id` (`CampaignReview`): campaign settings, budget slider with visible cap, per-ad-group keyword/match-type/negatives editing, variant on/off toggles, "what will launch" summary. `AssembleButton` + campaigns list on the client page. Approval/launch is Phase 7.
+
+### Phase 6 — what landed (for future sessions)
+- **Design system = KodoAI Editorial Brutalism** (`.claude/DesignSystem.md` is authoritative; pointer in `.claude/agent-memory/frontend-stylist/STYLE.md`). Dark, zero border-radius, acid-lime accent `#c8f060` used sparingly, Barlow Condensed (display) / IBM Plex Sans (body) / IBM Plex Mono (labels with `// ` prefix) via `next/font`. Built by the frontend-stylist agent.
+- Foundation: `globals.css` (`:root` KodoAI vars, dark-only), `tailwind.config.ts` (legacy token names — bg/surface/border/fg/muted/primary/danger/success — remapped to KodoAI vars + new tokens added; all border-radius = 0), `components/ui/primitives.tsx` rewritten (same export names/props; added `Badge`, `StatusBadge`, `PageHeader`, `EmptyState`, `Alert`).
+- App restructured into a `(app)` route group with a shell (`components/shell/{sidebar,topbar}.tsx` + `(app)/layout.tsx`): sidebar nav Dashboard/Clients/Campaigns/Activity + topbar quick action. Old top-level pages were moved under `(app)/`.
+- Screens: agency dashboard `/` (needs-attention, portfolio snapshot, recent activity), global state-grouped `/campaigns`, campaign detail `/campaigns/:id` (header `CampaignControls` gated by `canTransition` + `CampaignReview` body + Performance stub + Activity), `/activity`, plus `loading.tsx`/`error.tsx` per key route.
+- Backend glue (Node, deterministic): `lib/db/dashboard.ts` (`getPortfolioSummary`/`listAllCampaigns`/`listRecentActivity`), `campaigns.duplicateCampaign`, control routes `POST /api/campaigns/:id/transition` (validates via `canTransition`) + `/duplicate`.
+- DO NOT change `src/lib/render/**` fonts — those (Inter) are for generated ad creatives, separate from the brutalist app chrome.
+- Note: dashboard pages need Supabase creds to populate; without them `serverEnv()` fails fast → the route's `error.tsx` shows.
+
+### Phase 7 — what landed (for future sessions)
+- **Google Ads client is provider-abstracted** (`apps/web/src/lib/google-ads/`, built by production-coder), mirroring the LLM abstraction: `GoogleAdsClient` interface + `MockGoogleAdsClient` (deterministic fake resource names, no network) + `RealGoogleAdsClient` (REST v17: cached OAuth refresh-token grant → campaignBudget→campaign[PAUSED]→adGroups→criteria→RSAs). `getGoogleAdsClient()` returns real only when all 5 `GOOGLE_ADS_*` creds present AND `GOOGLE_ADS_USE_MOCK` ≠ true, else mock.
+- **Deterministic execution layer** `src/lib/execution/execute.ts::executeLaunch(config, profile, {customerId?, client?})`: validate → **enforce budget cap** (`min(config, profile.budget)` → micros; LLM never in this path) → **policy pre-check** (`policy.ts` scans enabled-ad text for banned superlatives + brand `do_not_use` → `PolicyError`) → build plan from ENABLED ads only → `client.launchCampaign`. `errors.ts` (ValidationError/PolicyError), `status.ts` (`postLaunchStatus` → scheduled if future flight else running).
+- **Launch route** `POST /api/campaigns/:id/launch`: idempotency guard (only draft/pending_approval), `executeLaunch`, `markLaunched(id,status,result)` (sets status + launched_at + published_resources), audits `campaign.launched` / `campaign.launch_failed`. Takes optional `{customerId}` (operating TEST CLIENT account id; dashes stripped). login-customer-id (manager) from env.
+- DB: migration `0003_campaign_launch.sql` adds `campaigns.published_resources jsonb` + `launched_at timestamptz`.
+- Approval gate UI (inline, brutalist): `components/campaign/approve-launch.tsx` — "Approve & Launch" (only for draft/pending_approval) → modal restating the budget cap + enabled-variant count + a test-client-id field → POST /launch; renders 422 policy violations. Wired into the campaign-detail header; the old disabled placeholder in `campaign-controls.tsx` was removed.
+- Module 6 (monitoring) = **stub** per MVP: the detail Performance section is status-aware and explains test accounts return no metrics; the feedback-loop data hooks (published_resources, launched_at, audit_log) exist. Live metrics + the longevity loop are production.
+- vitest: `src/lib/execution/execute.test.ts` + `src/lib/google-ads/mock.test.ts` (25 tests total). `vitest.config.ts` aliases `server-only` to a stub so server modules import under node-env tests.
+- **UNVERIFIED:** the real Google Ads REST path has not run against a live test account. Likely things to check on first real launch: exact v17 field casing (responsiveSearchAd, networkSettings, bidding strategy field for the goal), Display creatives (deferred — campaign+adgroup created, a warning is returned; responsive display ads need uploaded image assets), and geo-target criteria (not yet created — geo strings carried but not resolved to geo-constants). target_cpa/target_roas are mapped to maximize* (no target value carried).
+
+### Phase 7 — what landed (BACKEND; for future sessions)
+- **Provider-abstracted Google Ads client** at `apps/web/src/lib/google-ads/` (mirrors `lib/llm`): `types.ts` (`GoogleAdsClient` interface, `LaunchPlan`/`LaunchResult`, typed `GoogleAdsError{retryable}`), `mock.ts` (`MockGoogleAdsClient` — validates + fabricates `customers/<cid>/...mock-N` names, no network), `real.ts` (`RealGoogleAdsClient` — REST v17, OAuth refresh-token→access-token cached, mutate sequence budget→campaign→adGroups→criteria→RSA adGroupAds; **Display deferred to a warning**, not a failure), `retry.ts` (bounded backoff+jitter on retryable only), `index.ts` `getGoogleAdsClient()` → REAL only when all 5 creds present AND `GOOGLE_ADS_USE_MOCK!=true`, else MOCK (logged, no secrets). All customer ids stripped to digits.
+- **Deterministic execution layer** `lib/execution/`: `execute.ts::executeLaunch(config, profile, {customerId?, client?})` enforces the supreme rules — (1) budget cap `min(config, profile)`→micros, LLM never involved; (2) `policy.ts` final pre-publish text gate on ENABLED ads (banned superlatives/punctuation/brand `do_not_use`) → `PolicyError`; (3) drops disabled variants from the plan. `status.ts::postLaunchStatus` (future start→scheduled else running). `errors.ts` (`ValidationError`/`PolicyError`).
+- DB: `campaigns.markLaunched(id,status,result)` + migration `0003_campaign_launch.sql` (`published_resources jsonb`, `launched_at timestamptz`). Route `POST /api/campaigns/:id/launch` (nodejs): launchable only from draft|pending_approval (else 409), executes, marks launched, audits `campaign.launched`/`campaign.launch_failed`. Errors: PolicyError→422, ValidationError→400, GoogleAdsError→502.
+- Tests: `execution/execute.test.ts` + `google-ads/mock.test.ts` (17 new, 25 total) with MockGoogleAdsClient injected — budget cap, policy block/pass, enabled-only, status helper, mock result shape. `vitest.config.ts` now aliases `server-only`→`src/test/server-only-stub.ts` so server modules import under node-env tests.
+- **Real-API path is UNTESTED against a live account** (no creds in CI). The v17 mutate request/response shapes follow the docs but the user must verify against their Google Ads TEST account. Operating customer id (test CLIENT account) is supplied per-launch via the route body `customerId` (defaults to digits-of-campaign-id placeholder if omitted); `login-customer-id` (manager) comes from env.
 
 ---
 
