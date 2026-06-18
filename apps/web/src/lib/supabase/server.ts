@@ -19,6 +19,13 @@ export function getServiceClient(): SupabaseClient {
   const srv = serverEnv();
   cached = createClient(pub.NEXT_PUBLIC_SUPABASE_URL, srv.SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
+    // Next.js patches global fetch and caches GET responses keyed by URL —
+    // WITHOUT the Authorization header. A cached anon-level (RLS-empty) response
+    // would then be served to service-role reads, silently returning 0 rows.
+    // Force every Supabase request to bypass the Data Cache.
+    global: {
+      fetch: (input, init) => fetch(input, { ...init, cache: "no-store" }),
+    },
   });
   return cached;
 }

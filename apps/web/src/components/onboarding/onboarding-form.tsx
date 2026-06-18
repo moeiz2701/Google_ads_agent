@@ -181,8 +181,11 @@ export function OnboardingForm() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Could not create client");
-      router.push("/clients");
+      // Invalidate the App Router Cache BEFORE navigating, otherwise the push
+      // serves the stale /clients entry (empty list) cached from an earlier
+      // visit. refresh() must run while on the route whose cache we're clearing.
       router.refresh();
+      router.push("/clients");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create client");
     } finally {

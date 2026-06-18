@@ -59,6 +59,13 @@ export class GeminiProvider implements LlmProvider {
         temperature: input.temperature ?? 0.7,
         maxOutputTokens: input.maxOutputTokens ?? 2048,
         ...(json ? { responseMimeType: "application/json" } : {}),
+        // Gemini 2.5 models "think" using the SAME output-token budget. Left
+        // enabled, reasoning can consume the whole budget → finishReason
+        // MAX_TOKENS with no text part → spurious "no text" failures (502s).
+        // Disable thinking so the budget is spent on the actual answer.
+        ...(/2\.5/.test(this.model)
+          ? { thinkingConfig: { thinkingBudget: 0 } }
+          : {}),
       },
     };
 
@@ -107,9 +114,21 @@ function stripCodeFence(s: string): string {
 }
 
 function extractText(data: unknown): string {
-  const text = (data as any)?.candidates?.[0]?.content?.parts?.[0]?.text;
+  const candidate = (data as any)?.candidates?.[0];
+  const text = candidate?.content?.parts?.[0]?.text;
   if (typeof text !== "string" || text.length === 0) {
-    throw new LlmError("Gemini response contained no text", { retryable: true });
+    // Surface why so truncation (MAX_TOKENS) or safety blocks are diagnosable
+    // instead of an opaque "no text".
+    const finish = candidate?.finishReason;
+    const blocked = (data as any)?.promptFeedback?.blockReason;
+    const reason = blocked
+      ? `blocked: ${blocked}`
+      : finish
+        ? `finishReason: ${finish}`
+        : "unknown";
+    throw new LlmError(`Gemini response contained no text (${reason})`, {
+      retryable: true,
+    });
   }
   return text;
 }
