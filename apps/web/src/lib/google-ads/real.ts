@@ -23,7 +23,9 @@ import type { BidStrategy } from "@gaa/shared";
  */
 
 const OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
-const API_BASE = "https://googleads.googleapis.com/v17";
+/** Default API version. Google sunsets versions every few months — override via
+ *  GOOGLE_ADS_API_VERSION when this one retires (v17 was already removed). */
+const DEFAULT_API_VERSION = "v21";
 const REQUEST_TIMEOUT_MS = 30_000;
 /** Refresh the access token this many ms before its stated expiry. */
 const TOKEN_EXPIRY_SKEW_MS = 60_000;
@@ -35,6 +37,8 @@ export interface RealClientCreds {
   refreshToken: string;
   /** Manager (login) account; dashes stripped before use as a header. */
   loginCustomerId: string;
+  /** REST API version (e.g. "v21"). Defaults to DEFAULT_API_VERSION. */
+  apiVersion?: string;
 }
 
 const BID_STRATEGY_FIELD: Record<BidStrategy, Record<string, unknown>> = {
@@ -55,8 +59,12 @@ export class RealGoogleAdsClient implements GoogleAdsClient {
   readonly name = "google-ads";
   private accessToken: string | null = null;
   private accessTokenExpiresAt = 0;
+  private readonly apiBase: string;
 
-  constructor(private readonly creds: RealClientCreds) {}
+  constructor(private readonly creds: RealClientCreds) {
+    const version = creds.apiVersion || DEFAULT_API_VERSION;
+    this.apiBase = `https://googleads.googleapis.com/${version}`;
+  }
 
   async launchCampaign(plan: LaunchPlan): Promise<LaunchResult> {
     assertValidPlan(plan);
@@ -224,7 +232,7 @@ export class RealGoogleAdsClient implements GoogleAdsClient {
     service: string,
     operations: unknown[],
   ): Promise<unknown> {
-    const url = `${API_BASE}/customers/${cid}/${service}:mutate`;
+    const url = `${this.apiBase}/customers/${cid}/${service}:mutate`;
     const token = await this.getAccessToken();
     return withRetry(async () => {
       const controller = new AbortController();

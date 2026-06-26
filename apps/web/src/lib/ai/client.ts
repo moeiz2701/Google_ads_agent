@@ -14,7 +14,9 @@ import { serverEnv } from "@/lib/env";
 
 export class AiServiceError extends Error {}
 
-const ANALYZE_TIMEOUT_MS = 90_000;
+// Natural Gemini (thinking on) enriches the corpus per-ad sequentially, so a
+// real cached-corpus run is ~75s; give generous headroom over that before abort.
+const ANALYZE_TIMEOUT_MS = 180_000;
 
 /** Best-effort vertical for corpus selection; cached source falls back to med_spa. */
 function inferVertical(client: ClientProfile): string {
@@ -77,7 +79,9 @@ export async function analyzeCompetitors(
   return parsed.data;
 }
 
-const GENERATE_TIMEOUT_MS = 120_000;
+// Generation does more LLM work than analysis (N variants x generate+critique,
+// plus regenerations and transient 503 retries), so give it the full route budget.
+const GENERATE_TIMEOUT_MS = 180_000;
 
 /** Derive the compact StyleSpec the generator consumes from the client brand kit. */
 function styleFromClient(client: ClientProfile): StyleSpec {

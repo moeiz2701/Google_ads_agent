@@ -49,7 +49,7 @@ def _seeded_llm(
                 cta="Book Consult",
                 angle="trust",
             ),
-            "SearchRenderSpec": SearchRenderSpec(
+            "_LooseSearchRenderSpec": SearchRenderSpec(
                 headlines=[RsaHeadline(text=f"Same-Week Care {i}") for i in range(10)],
                 descriptions=[
                     RsaDescription(text=f"Board-certified care, option {i}.")

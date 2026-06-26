@@ -56,6 +56,7 @@ export function getGoogleAdsClient(): GoogleAdsClient {
     clientSecret: creds.clientSecret!,
     refreshToken: creds.refreshToken!,
     loginCustomerId: creds.loginCustomerId!,
+    apiVersion: env.GOOGLE_ADS_API_VERSION,
   });
   return cached;
 }

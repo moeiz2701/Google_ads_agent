@@ -18,6 +18,7 @@ import {
   SectionTitle,
   Select,
 } from "@/components/ui/primitives";
+import { DisplayPreview } from "@/components/creatives/display-preview";
 
 const GOALS: CampaignGoal[] = ["leads", "calls", "sales", "traffic", "awareness"];
 const BID_STRATEGIES: BidStrategy[] = [
@@ -288,27 +289,35 @@ export function CampaignReview({
           {/* Ads (variant toggles) */}
           <div>
             <p className="mb-2 text-xs font-medium text-muted">Variants (toggle which launch)</p>
-            <div className="space-y-1.5">
+            <div className="space-y-3">
               {g.ads.length === 0 && (
                 <p className="text-sm text-muted">No variants in this group yet.</p>
               )}
-              {g.ads.map((ad, ai) => (
-                <label key={ad.ad_id} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={ad.enabled}
-                    onChange={(e) => {
-                      const ads = g.ads.map((a, i) =>
-                        i === ai ? { ...a, enabled: e.target.checked } : a,
-                      );
-                      setGroup(gi, { ads });
-                    }}
-                  />
-                  <span className={ad.enabled ? "" : "text-muted line-through"}>
-                    {adLabel(ad.spec)}
-                  </span>
-                </label>
-              ))}
+              {g.ads.map((ad, ai) => {
+                const toggle = (enabled: boolean) =>
+                  setGroup(gi, {
+                    ads: g.ads.map((a, i) => (i === ai ? { ...a, enabled } : a)),
+                  });
+                return (
+                  <div key={ad.ad_id} className="space-y-2">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={ad.enabled}
+                        onChange={(e) => toggle(e.target.checked)}
+                      />
+                      <span className={ad.enabled ? "" : "text-muted line-through"}>
+                        {adLabel(ad.spec)}
+                      </span>
+                    </label>
+                    {ad.spec.format === "display" && (
+                      <div className={`max-w-sm ${ad.enabled ? "" : "opacity-40"}`}>
+                        <DisplayPreview creativeId={ad.ad_id} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </Card>

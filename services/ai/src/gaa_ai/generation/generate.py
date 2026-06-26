@@ -27,6 +27,9 @@ Guardrails enforced here (deterministic, not trusted to the LLM):
     * Display authoring size is pinned to 1200x628 (renderer fans out later, §5.6).
     * RSA char limits are repaired (truncate over-limit, pad if too few) BEFORE
       schema validation so we never ship over-limit assets and never crash the batch.
+      The LLM is parsed into a LENIENT model (no length caps) — a real model
+      routinely overshoots the 30/90-char RSA maxima, and the strict schema would
+      reject it inside the structured-output parser before repair could run.
 
 Per-variant LLM failure is logged and skipped — it must not kill the batch.
 """
@@ -35,6 +38,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+
+from pydantic import BaseModel
 
 from gaa_ai.generation.brief import (
     GENERATION_SYSTEM,
@@ -184,16 +189,52 @@ def _generate_display(
 # --- Search ----------------------------------------------------------------
 
 
+class _LooseRsaHeadline(BaseModel):
+    """An RSA headline as the LLM emits it — no length cap, so the structured-output
+    parser accepts over-limit text and the deterministic repair truncates it."""
+
+    text: str = ""
+    pin: int | None = None
+
+
+class _LooseRsaDescription(BaseModel):
+    text: str = ""
+    pin: int | None = None
+
+
+class _LooseSearchRenderSpec(BaseModel):
+    """Lenient parse target for the RSA call. Mirrors SearchRenderSpec WITHOUT the
+    char-length / list-length constraints so real-model overshoot never fails the
+    parse; _repair_search converts this into a valid strict SearchRenderSpec."""
+
+    headlines: list[_LooseRsaHeadline] = []
+    descriptions: list[_LooseRsaDescription] = []
+    angle: str | None = None
+
+
 def _truncate(text: str, limit: int) -> str:
+    """Truncate to ``limit`` at a WORD boundary so we never ship a mid-word fragment
+    (which reads as an incomplete sentence and tanks the quality critique)."""
     text = (text or "").strip()
-    return text if len(text) <= limit else text[:limit].rstrip()
+    if len(text) <= limit:
+        return text
+    cut = text[:limit]
+    if " " in cut:
+        cut = cut[: cut.rfind(" ")]
+    return cut.rstrip(" ,;:-")
 
 
-def _repair_search(spec: SearchRenderSpec, plan: _AxisPlan) -> SearchRenderSpec:
-    """Enforce char limits and asset counts BEFORE validation.
+def _pin(value: int | None, allowed: tuple[int, ...]) -> int | None:
+    """Keep only RSA pin values the strict schema allows; drop anything else."""
+    return value if value in allowed else None
 
-    Truncate over-limit assets (never ship over-limit copy); drop empties; pad with
-    safe insight-derived assets if the LLM returned too few to satisfy schema minima.
+
+def _repair_search(spec: _LooseSearchRenderSpec, plan: _AxisPlan) -> SearchRenderSpec:
+    """Build a valid strict SearchRenderSpec from the lenient LLM output.
+
+    Truncate over-limit assets (never ship over-limit copy); drop empties/dupes; pad
+    with safe insight-derived assets if the LLM returned too few to satisfy schema
+    minima. This is what makes the strict schema validation downstream always pass.
     """
     headlines: list[RsaHeadline] = []
     seen_h: set[str] = set()
@@ -201,14 +242,14 @@ def _repair_search(spec: SearchRenderSpec, plan: _AxisPlan) -> SearchRenderSpec:
         t = _truncate(h.text, HEADLINE_MAX)
         if t and t.lower() not in seen_h:
             seen_h.add(t.lower())
-            headlines.append(RsaHeadline(text=t, pin=h.pin))
+            headlines.append(RsaHeadline(text=t, pin=_pin(h.pin, (1, 2, 3))))
     descriptions: list[RsaDescription] = []
     seen_d: set[str] = set()
     for d in spec.descriptions or []:
         t = _truncate(d.text, DESCRIPTION_MAX)
         if t and t.lower() not in seen_d:
             seen_d.add(t.lower())
-            descriptions.append(RsaDescription(text=t, pin=d.pin))
+            descriptions.append(RsaDescription(text=t, pin=_pin(d.pin, (1, 2))))
 
     # Pad to schema minima with deterministic, insight-grounded fallbacks.
     pad_h = _truncate(plan.insight_ref, HEADLINE_MAX) or "Learn More Today"
@@ -220,12 +261,10 @@ def _repair_search(spec: SearchRenderSpec, plan: _AxisPlan) -> SearchRenderSpec:
             RsaDescription(text=_truncate(f"{pad_d} ({len(descriptions) + 1})", DESCRIPTION_MAX))
         )
 
-    return spec.model_copy(
-        update={
-            "headlines": headlines[:HEADLINE_TARGET + 2],  # within Google's 15 max
-            "descriptions": descriptions[:DESCRIPTION_TARGET],
-            "angle": spec.angle or plan.insight_ref,
-        }
+    return SearchRenderSpec(
+        headlines=headlines[:HEADLINE_TARGET + 2],  # within Google's 15 max
+        descriptions=descriptions[:DESCRIPTION_TARGET],
+        angle=spec.angle or plan.insight_ref,
     )
 
 
@@ -236,14 +275,18 @@ def _generate_search(
         f"Write ONE Responsive Search Ad (RSA). Axis: {plan.axis}. {plan.direction}"
     )
     contract = (
-        f"Output a SearchRenderSpec with {HEADLINE_TARGET}-12 distinct headlines "
-        f"(each <= {HEADLINE_MAX} characters) and {DESCRIPTION_TARGET} descriptions "
-        f"(each <= {DESCRIPTION_MAX} characters), plus an 'angle' naming the insight."
+        f"Output a SearchRenderSpec with {HEADLINE_TARGET}-12 distinct headlines and "
+        f"{DESCRIPTION_TARGET} descriptions, plus an 'angle' naming the insight. "
+        f"HARD CHARACTER LIMITS — count the characters and stay within them: each "
+        f"headline <= {HEADLINE_MAX} chars; each description <= {DESCRIPTION_MAX} chars. "
+        "Write each description as ONE complete sentence that ends with a clear call "
+        "to action and fits the limit — never exceed it, never cram multiple sentences, "
+        "and never end mid-thought."
     )
     prompt = build_brief(
         inp, instruction=instruction, output_contract=contract, critique_notes=critique_notes
     )
-    raw = llm.generate_json(prompt, SearchRenderSpec, system=GENERATION_SYSTEM)
+    raw = llm.generate_json(prompt, _LooseSearchRenderSpec, system=GENERATION_SYSTEM)
     spec = _repair_search(raw, plan)
     return Variant(
         spec=spec,

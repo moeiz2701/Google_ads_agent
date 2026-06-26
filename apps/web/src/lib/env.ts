@@ -29,6 +29,9 @@ const serverSchema = z.object({
   GOOGLE_ADS_CLIENT_SECRET: z.string().optional(),
   GOOGLE_ADS_REFRESH_TOKEN: z.string().optional(),
   GOOGLE_ADS_LOGIN_CUSTOMER_ID: z.string().optional(),
+  // Google Ads REST API version. Google sunsets versions every few months, so
+  // keep this current and overridable without a code change (v17 was retired).
+  GOOGLE_ADS_API_VERSION: z.string().default("v21"),
   // Force the mock client even when creds are present (safe demos / CI).
   GOOGLE_ADS_USE_MOCK: z
     .enum(["true", "false"])

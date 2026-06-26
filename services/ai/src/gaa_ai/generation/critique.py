@@ -81,6 +81,36 @@ def _variant_text(variant: Variant) -> str:
     return " ".join(p for p in parts if p)
 
 
+def _critique_copy(variant: Variant) -> str:
+    """Format-aware, LABELED copy for the LLM reviewer.
+
+    An RSA is a pool of independent, interchangeable headline/description assets that
+    Google rotates and recombines — concatenating them into one blob reads (wrongly)
+    as a 'fragmented' paragraph. Present them as labeled lists with that context so
+    the reviewer judges asset clarity and shared theme, not paragraph cohesion.
+    """
+    spec = variant.spec
+    if isinstance(spec, SearchRenderSpec):
+        headlines = "\n".join(f"  - {h.text}" for h in spec.headlines)
+        descriptions = "\n".join(f"  - {d.text}" for d in spec.descriptions)
+        return (
+            "Format: Responsive Search Ad (RSA). The headlines and descriptions below "
+            "are INDEPENDENT, interchangeable assets — Google shows ~3 headlines and "
+            "~2 descriptions together in varying combinations. They are not meant to "
+            "read as a single paragraph. Judge whether the assets share one clear "
+            "theme, each reads well on its own, and at least some carry a strong CTA.\n"
+            f"Headlines (each <= 30 chars):\n{headlines}\n"
+            f"Descriptions (each <= 90 chars):\n{descriptions}"
+        )
+    if isinstance(spec, DisplayRenderSpec):
+        lines = [f"  Headline: {spec.headline}"]
+        if spec.subhead:
+            lines.append(f"  Subhead: {spec.subhead}")
+        lines.append(f"  CTA: {spec.cta}")
+        return "Format: Responsive Display ad.\n" + "\n".join(lines)
+    return _variant_text(variant)
+
+
 def _policy_violations(text: str, do_not_use: list[str] | None) -> list[str]:
     """Deterministic hard-gate scan. Returns the list of violations found."""
     found: list[str] = []
@@ -97,7 +127,11 @@ _CRITIQUE_SYSTEM = (
     "You are a Google Ads policy and quality reviewer. You score ad copy on a "
     "rubric and apply ad-policy safety as a hard pass/fail gate. Disallow "
     "unverifiable superlatives (best, #1, guaranteed, cheapest), trademark misuse, "
-    "and clickbait. Score conservatively: when in doubt on policy, mark it unsafe."
+    "and clickbait. Score conservatively: when in doubt on policy, mark it unsafe. "
+    "For Responsive Search Ads, the headlines and descriptions are independent, "
+    "interchangeable assets that Google mixes at serve time — do NOT penalize them "
+    "for not forming a single flowing paragraph; assess each asset's clarity and "
+    "whether the set conveys one coherent theme."
 )
 
 _CRITIQUE_TASK = (
@@ -122,7 +156,7 @@ def critique_variant(
     do_not_use = inp.style.do_not_use if inp.style else None
     violations = _policy_violations(text, do_not_use)
 
-    prompt = stable_prefix(inp) + "\n" + _CRITIQUE_TASK.format(copy=text)
+    prompt = stable_prefix(inp) + "\n" + _CRITIQUE_TASK.format(copy=_critique_copy(variant))
     try:
         raw = llm.generate_json(prompt, _CritiqueLlmScore, system=_CRITIQUE_SYSTEM)
         score = CritiqueScore.model_validate(raw.model_dump())

@@ -6,7 +6,7 @@ import { logAction } from "@/lib/db/audit";
 import { handleRouteError, jsonError } from "@/lib/http";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 180;
 
 /** POST /api/clients/:id/analyze — run Module 2 and persist the analysis. */
 export async function POST(

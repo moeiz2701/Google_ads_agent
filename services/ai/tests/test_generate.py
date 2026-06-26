@@ -9,6 +9,9 @@ from __future__ import annotations
 
 from gaa_ai.generation.generate import (
     DEFAULT_TEMPLATE_ID,
+    _LooseRsaDescription,
+    _LooseRsaHeadline,
+    _LooseSearchRenderSpec,
     _plan_axes,
     _repair_display,
     _repair_search,
@@ -74,7 +77,7 @@ def _display_llm(template_id: str = "split_image_left") -> FakeLlm:
 def _search_llm(headlines: int = 10, descriptions: int = 4) -> FakeLlm:
     return FakeLlm(
         {
-            "SearchRenderSpec": SearchRenderSpec(
+            "_LooseSearchRenderSpec": SearchRenderSpec(
                 headlines=[RsaHeadline(text=f"Headline {i}") for i in range(headlines)],
                 descriptions=[
                     RsaDescription(text=f"Description number {i} here.")
@@ -146,17 +149,17 @@ def test_axes_span_gap_then_proven() -> None:
 
 
 def test_rsa_char_limits_repaired() -> None:
-    over = SearchRenderSpec.model_construct(
-        format="search",
+    # The LLM is parsed into the lenient model, which accepts over-limit copy; the
+    # repair is what enforces the strict RSA maxima. Build that lenient input here.
+    over = _LooseSearchRenderSpec(
         headlines=[
-            RsaHeadline.model_construct(text="x" * 80, pin=None),  # over 30
-            RsaHeadline.model_construct(text="Short One", pin=None),
+            _LooseRsaHeadline(text="x" * 80, pin=None),  # over 30
+            _LooseRsaHeadline(text="Short One", pin=None),
         ],
         descriptions=[
-            RsaDescription.model_construct(text="y" * 200, pin=None),  # over 90
+            _LooseRsaDescription(text="y" * 200, pin=None),  # over 90
         ],
         angle="",
-        paths=None,
     )
     plan = _plan_axes(_inp(n=1), 1)[0]
     repaired = _repair_search(over, plan)
