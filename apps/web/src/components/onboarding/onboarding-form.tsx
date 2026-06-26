@@ -139,6 +139,8 @@ export function OnboardingForm() {
         fonts: {
           heading: headingFont.trim() || null,
           body: bodyFont.trim() || null,
+          heading_url: null,
+          body_url: null,
         },
         tone: tone.trim() || null,
         do_not_use: [],

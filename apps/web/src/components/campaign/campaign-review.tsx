@@ -312,7 +312,7 @@ export function CampaignReview({
                     </label>
                     {ad.spec.format === "display" && (
                       <div className={`max-w-sm ${ad.enabled ? "" : "opacity-40"}`}>
-                        <DisplayPreview creativeId={ad.ad_id} />
+                        <DisplayPreview creativeId={ad.ad_id} templateId={ad.spec.template_id} />
                       </div>
                     )}
                   </div>

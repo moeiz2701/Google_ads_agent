@@ -7,8 +7,10 @@ import { listCampaigns } from "@/lib/db/campaigns";
 import { InsightsView } from "@/components/insights/insights-view";
 import { RunAnalysisButton } from "@/components/insights/run-analysis-button";
 import { CreativeCard } from "@/components/creatives/creative-card";
-import { GenerateButton } from "@/components/creatives/generate-button";
+import { GeneratePanel } from "@/components/creatives/generate-panel";
+import { DesignLanguageEditor } from "@/components/clients/design-language-editor";
 import { AssembleButton } from "@/components/campaign/assemble-button";
+import { imageGenConfigured } from "@/lib/imagegen";
 import { PageHeader, StatusBadge, Card } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +28,16 @@ export default async function ClientDetailPage({
     listCreatives(params.id).catch(() => []),
     listCampaigns(params.id).catch(() => []),
   ]);
+
+  // Is AI image-gen actually usable for this client (provider configured AND the
+  // client opted in)? Drives the per-creative background-source label.
+  let aiConfigured = false;
+  try {
+    aiConfigured = imageGenConfigured();
+  } catch {
+    aiConfigured = false;
+  }
+  const aiBackgroundsActive = client.use_ai_backgrounds && aiConfigured;
 
   return (
     <div className="max-w-[900px] mx-auto space-y-10">
@@ -87,6 +99,16 @@ export default async function ClientDetailPage({
         )}
       </section>
 
+      {/* Design language (editable, before generation) */}
+      <section aria-label="Design language">
+        <DesignLanguageEditor
+          clientId={client.client_id}
+          initial={client.brand_kit}
+          initialUseAi={client.use_ai_backgrounds}
+          aiConfigured={aiConfigured}
+        />
+      </section>
+
       {/* Creative Library */}
       <section aria-labelledby="creatives-heading">
         <div className="flex items-center justify-between gap-4 mb-4">
@@ -99,7 +121,7 @@ export default async function ClientDetailPage({
               <span className="ml-2">({creatives.length})</span>
             )}
           </h2>
-          <GenerateButton
+          <GeneratePanel
             clientId={client.client_id}
             disabled={!analysis}
             hasCreatives={creatives.length > 0}
@@ -120,7 +142,7 @@ export default async function ClientDetailPage({
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {creatives.map((c) => (
-              <CreativeCard key={c.id} creative={c} />
+              <CreativeCard key={c.id} creative={c} aiBackgroundsActive={aiBackgroundsActive} />
             ))}
           </div>
         )}

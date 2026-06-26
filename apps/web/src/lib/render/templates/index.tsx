@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactElement } from "react";
 import { FONT_FAMILY } from "../fonts";
 import { brandGradient, readableOn, withAlpha } from "../palette";
-import { CtaPill } from "./primitives";
+import { CtaPill, LogoSlot } from "./primitives";
 import {
   type DisplayTemplate,
   type TemplateId,
@@ -39,12 +39,61 @@ function typo(props: TemplateProps): Typo {
 
 const FILL: CSSProperties = { position: "absolute", top: 0, left: 0 };
 
-/** Absolutely-positioned background: cover image when present, else brand gradient. */
-function Backdrop(props: TemplateProps): ReactElement {
-  const { imageUrl, profile, palette } = props;
-  if (imageUrl) {
+/**
+ * Optional overlay applied over a background photo (spec.image_treatment). Makes a
+ * generic stock image read as designed/on-brand instead of a bare photo:
+ *  - scrim:       dark bottom-up gradient → copy stays legible
+ *  - brand_wash:  translucent brand-primary wash → on-brand tint
+ * Returns null for "none" (or an unknown value) so the photo shows unmodified.
+ */
+function treatmentOverlay(
+  treatment: string,
+  palette: TemplateProps["palette"],
+  profile: TemplateProps["profile"],
+): ReactElement | null {
+  const base: CSSProperties = {
+    ...FILL,
+    display: "flex",
+    width: profile.width,
+    height: profile.height,
+  };
+  if (treatment === "scrim") {
     return (
-      // eslint-disable-next-line @next/next/no-img-element -- Satori element, not DOM
+      <div
+        style={{
+          ...base,
+          backgroundImage:
+            "linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0) 55%)",
+        }}
+      />
+    );
+  }
+  if (treatment === "brand_wash") {
+    return <div style={{ ...base, backgroundColor: withAlpha(palette.primary, 0.42) }} />;
+  }
+  return null;
+}
+
+/** Absolutely-positioned background: cover image (with optional treatment) when
+ *  present, else brand gradient. */
+function Backdrop(props: TemplateProps): ReactElement {
+  const { imageUrl, profile, palette, spec } = props;
+  if (!imageUrl) {
+    return (
+      <div
+        style={{
+          ...FILL,
+          display: "flex",
+          width: profile.width,
+          height: profile.height,
+          backgroundImage: brandGradient(palette),
+        }}
+      />
+    );
+  }
+  return (
+    <div style={{ ...FILL, display: "flex", width: profile.width, height: profile.height }}>
+      {/* eslint-disable-next-line @next/next/no-img-element -- Satori element, not DOM */}
       <img
         src={imageUrl}
         width={profile.width}
@@ -52,18 +101,8 @@ function Backdrop(props: TemplateProps): ReactElement {
         style={{ ...FILL, width: profile.width, height: profile.height, objectFit: "cover" }}
         alt=""
       />
-    );
-  }
-  return (
-    <div
-      style={{
-        ...FILL,
-        display: "flex",
-        width: profile.width,
-        height: profile.height,
-        backgroundImage: brandGradient(palette),
-      }}
-    />
+      {treatmentOverlay(spec.image_treatment, palette, profile)}
+    </div>
   );
 }
 
@@ -79,16 +118,24 @@ function root(profile: TemplateProps["profile"], extra: CSSProperties): CSSPrope
   };
 }
 
+/** The brand logo for a copy column, or null when there's no logo / no room.
+ *  Sized to the canvas and capped so it never dominates a small banner. */
+function logoNode(props: TemplateProps): ReactElement | null {
+  if (!props.profile.showLogo || !props.logo) return null;
+  const h = Math.max(16, Math.min(64, Math.round(props.profile.height * 0.14)));
+  return <LogoSlot logo={props.logo} maxHeight={h} />;
+}
+
 // ── 1. split_image_left ─────────────────────────────────────────────────────
 const splitImageLeft: DisplayTemplate = (props) => {
-  const { spec, profile, palette } = props;
+  const { spec, profile, palette, headingFamily, bodyFamily } = props;
   const t = typo(props);
   const fg = readableOn(palette.neutral);
   // Tall/narrow → stack image over copy; otherwise image-left / copy-right.
   const column = profile.cls === "skyscraper";
   const imageFlex = column ? "0 0 45%" : "0 0 42%";
   return (
-    <div style={root(profile, { flexDirection: column ? "column" : "row" })}>
+    <div style={root(profile, { flexDirection: column ? "column" : "row", fontFamily: bodyFamily })}>
       <div style={{ display: "flex", flex: imageFlex, position: "relative" }}>
         <Backdrop {...props} />
       </div>
@@ -104,7 +151,10 @@ const splitImageLeft: DisplayTemplate = (props) => {
           padding: profile.pad,
         }}
       >
-        <div style={{ display: "flex", fontWeight: 700, fontSize: t.h1, lineHeight: 1.05 }}>
+        {logoNode(props)}
+        <div
+          style={{ display: "flex", fontFamily: headingFamily, fontWeight: 700, fontSize: t.h1, lineHeight: 1.05 }}
+        >
           {spec.headline}
         </div>
         {profile.showSubhead && spec.subhead ? (
@@ -113,7 +163,7 @@ const splitImageLeft: DisplayTemplate = (props) => {
           </div>
         ) : null}
         <div style={{ display: "flex", marginTop: Math.round(t.cta * 0.4) }}>
-          <CtaPill label={spec.cta} bg={palette.accent} fontSize={t.cta} />
+          <CtaPill label={spec.cta} bg={palette.accent} fontSize={t.cta} fontFamily={bodyFamily} />
         </div>
       </div>
     </div>
@@ -122,10 +172,10 @@ const splitImageLeft: DisplayTemplate = (props) => {
 
 // ── 2. image_overlay_bottom ─────────────────────────────────────────────────
 const imageOverlayBottom: DisplayTemplate = (props) => {
-  const { spec, profile, palette } = props;
+  const { spec, profile, palette, headingFamily, bodyFamily } = props;
   const t = typo(props);
   return (
-    <div style={root(profile, { flexDirection: "column", justifyContent: "flex-end" })}>
+    <div style={root(profile, { flexDirection: "column", justifyContent: "flex-end", fontFamily: bodyFamily })}>
       <Backdrop {...props} />
       <div
         style={{
@@ -138,7 +188,10 @@ const imageOverlayBottom: DisplayTemplate = (props) => {
           padding: profile.pad,
         }}
       >
-        <div style={{ display: "flex", fontWeight: 700, fontSize: t.h1, lineHeight: 1.05 }}>
+        {logoNode(props)}
+        <div
+          style={{ display: "flex", fontFamily: headingFamily, fontWeight: 700, fontSize: t.h1, lineHeight: 1.05 }}
+        >
           {spec.headline}
         </div>
         {profile.showSubhead && spec.subhead ? (
@@ -147,7 +200,7 @@ const imageOverlayBottom: DisplayTemplate = (props) => {
           </div>
         ) : null}
         <div style={{ display: "flex", marginTop: Math.round(t.cta * 0.3) }}>
-          <CtaPill label={spec.cta} bg={palette.accent} fontSize={t.cta} />
+          <CtaPill label={spec.cta} bg={palette.accent} fontSize={t.cta} fontFamily={bodyFamily} />
         </div>
       </div>
     </div>
@@ -156,7 +209,7 @@ const imageOverlayBottom: DisplayTemplate = (props) => {
 
 // ── 3. bold_centered ────────────────────────────────────────────────────────
 const boldCentered: DisplayTemplate = (props) => {
-  const { spec, profile, palette } = props;
+  const { spec, profile, palette, headingFamily, bodyFamily } = props;
   const t = typo(props);
   const fg = readableOn(palette.primary);
   return (
@@ -170,11 +223,14 @@ const boldCentered: DisplayTemplate = (props) => {
         backgroundColor: palette.primary,
         color: fg,
         padding: profile.pad,
+        fontFamily: bodyFamily,
       })}
     >
+      {logoNode(props)}
       <div
         style={{
           display: "flex",
+          fontFamily: headingFamily,
           fontWeight: 700,
           fontSize: t.h1,
           lineHeight: 1.05,
@@ -189,7 +245,7 @@ const boldCentered: DisplayTemplate = (props) => {
         </div>
       ) : null}
       <div style={{ display: "flex", marginTop: Math.round(t.cta * 0.5) }}>
-        <CtaPill label={spec.cta} bg={palette.accent} fontSize={t.cta} />
+        <CtaPill label={spec.cta} bg={palette.accent} fontSize={t.cta} fontFamily={bodyFamily} />
       </div>
     </div>
   );
@@ -197,12 +253,12 @@ const boldCentered: DisplayTemplate = (props) => {
 
 // ── 4. minimal_left_rule ────────────────────────────────────────────────────
 const minimalLeftRule: DisplayTemplate = (props) => {
-  const { spec, profile, palette } = props;
+  const { spec, profile, palette, headingFamily, bodyFamily } = props;
   const t = typo(props);
   const fg = palette.text;
   const rule = Math.max(4, Math.round(profile.pad * 0.45));
   return (
-    <div style={root(profile, { flexDirection: "row", backgroundColor: palette.neutral })}>
+    <div style={root(profile, { flexDirection: "row", backgroundColor: palette.neutral, fontFamily: bodyFamily })}>
       <div style={{ display: "flex", width: rule, height: profile.height, backgroundColor: palette.accent }} />
       <div
         style={{
@@ -215,7 +271,10 @@ const minimalLeftRule: DisplayTemplate = (props) => {
           padding: profile.pad,
         }}
       >
-        <div style={{ display: "flex", fontWeight: 700, fontSize: t.h1, lineHeight: 1.05 }}>
+        {logoNode(props)}
+        <div
+          style={{ display: "flex", fontFamily: headingFamily, fontWeight: 700, fontSize: t.h1, lineHeight: 1.05 }}
+        >
           {spec.headline}
         </div>
         {profile.showSubhead && spec.subhead ? (
@@ -224,7 +283,7 @@ const minimalLeftRule: DisplayTemplate = (props) => {
           </div>
         ) : null}
         <div style={{ display: "flex", marginTop: Math.round(t.cta * 0.4) }}>
-          <CtaPill label={spec.cta} bg={palette.primary} fontSize={t.cta} />
+          <CtaPill label={spec.cta} bg={palette.primary} fontSize={t.cta} fontFamily={bodyFamily} />
         </div>
       </div>
     </div>

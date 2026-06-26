@@ -25,6 +25,10 @@ export type BrandPalette = z.infer<typeof BrandPalette>;
 export const BrandFonts = z.object({
   heading: z.string().nullable(),
   body: z.string().nullable(),
+  /** Downloadable font-file URLs (ttf/otf) when discovered from the site's
+   *  @font-face — lets the renderer use a self-hosted (non-Google) brand font. */
+  heading_url: z.string().nullable().default(null),
+  body_url: z.string().nullable().default(null),
 });
 export type BrandFonts = z.infer<typeof BrandFonts>;
 
@@ -42,7 +46,7 @@ export type BrandKit = z.infer<typeof BrandKit>;
 export const emptyBrandKit = (): BrandKit => ({
   logo_url: null,
   palette: { primary: null, accent: null, neutral: null, text: null },
-  fonts: { heading: null, body: null },
+  fonts: { heading: null, body: null, heading_url: null, body_url: null },
   tone: null,
   do_not_use: [],
 });

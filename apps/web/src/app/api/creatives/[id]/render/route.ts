@@ -26,7 +26,7 @@ export async function GET(
     if (data.spec.format !== "display") {
       return jsonError(409, "Only Display creatives are rendered to images");
     }
-    return await renderDisplayResponse(data.spec, data.brandKit, size);
+    return await renderDisplayResponse(data.spec, data.brandKit, size, data.allowAi);
   } catch (err) {
     console.error("[api/creatives/:id/render]", err);
     return jsonError(500, "Failed to render creative");

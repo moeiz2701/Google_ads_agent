@@ -94,12 +94,20 @@ function styleFromClient(client: ClientProfile): StyleSpec {
   };
 }
 
+export interface GenerateOptions {
+  nPerFormat?: number;
+  formats?: Array<"search" | "display">;
+  /** Display template allowlist (subset of DISPLAY_TEMPLATE_IDS); empty = all. */
+  allowedTemplates?: string[];
+}
+
 export async function generateVariants(
   client: ClientProfile,
   analysis: AnalysisObject,
-  opts: { nPerFormat?: number } = {},
+  opts: GenerateOptions = {},
 ): Promise<GenerationResult> {
   const { AI_SERVICE_URL } = serverEnv();
+  const formats = opts.formats?.length ? opts.formats : ["search", "display"];
   const payload = {
     client: {
       name: client.name,
@@ -112,8 +120,9 @@ export async function generateVariants(
     },
     analysis,
     style: styleFromClient(client),
-    formats: ["search", "display"],
+    formats,
     n_per_format: opts.nPerFormat ?? 3,
+    allowed_templates: opts.allowedTemplates?.length ? opts.allowedTemplates : null,
   };
 
   const controller = new AbortController();

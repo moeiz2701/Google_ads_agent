@@ -58,6 +58,7 @@ from gaa_ai.schemas import (
 from gaa_ai.schemas.render_spec import (
     DESCRIPTION_MAX,
     HEADLINE_MAX,
+    IMAGE_TREATMENTS,
 )
 from gaa_ai.templates import DISPLAY_TEMPLATES, is_valid_template
 
@@ -150,11 +151,27 @@ def _coerce_template(template_id: str | None) -> str:
     return DEFAULT_TEMPLATE_ID
 
 
+def _coerce_treatment(treatment: str | None) -> str:
+    """Keep a valid image treatment; coerce anything else to "none" (LLM never
+    freehands an effect — same guardrail pattern as template_id)."""
+    if treatment is not None and treatment in IMAGE_TREATMENTS:
+        return treatment
+    if treatment:
+        logger.warning(
+            "LLM returned invalid image_treatment %r; coercing to 'none' (valid: %s)",
+            treatment,
+            ", ".join(IMAGE_TREATMENTS),
+        )
+    return "none"
+
+
 def _repair_display(spec: DisplayRenderSpec, plan: _AxisPlan) -> DisplayRenderSpec:
-    """Pin authoring size, validate template_id, ensure angle ties to the insight."""
+    """Pin authoring size, validate template_id + image_treatment, tie angle to the
+    insight."""
     return spec.model_copy(
         update={
             "template_id": _coerce_template(spec.template_id),
+            "image_treatment": _coerce_treatment(spec.image_treatment),
             "size": AUTHORING_SIZE,
             "angle": spec.angle or plan.insight_ref,
         }
@@ -170,7 +187,10 @@ def _generate_display(
     contract = (
         "Output a DisplayRenderSpec: a template_id from "
         f"[{', '.join(DISPLAY_TEMPLATES)}], a headline (<= ~30 chars), an optional "
-        "subhead, a cta (imperative, <= ~20 chars), an optional image query, and an "
+        "subhead, a cta (imperative, <= ~20 chars), an image with a specific, "
+        "brand-relevant query (not generic stock terms), an 'image_treatment' from "
+        f"[{', '.join(IMAGE_TREATMENTS)}] (use 'scrim' or 'brand_wash' when copy sits "
+        "over the photo so it reads as designed, not a plain stock image), and an "
         "'angle' string naming the insight this exploits."
     )
     prompt = build_brief(
@@ -320,6 +340,43 @@ def generate_one(
         return None
 
 
+def resolve_template_pool(allowed: list[str] | None) -> list[str]:
+    """The templates a batch may use: the caller's allowlist intersected with the
+    real registry, falling back to the full registry when empty/invalid."""
+    if allowed:
+        pool = [t for t in allowed if t in DISPLAY_TEMPLATES]
+        if pool:
+            return pool
+    return list(DISPLAY_TEMPLATES)
+
+
+def _diversify_display_templates(
+    variants: list[Variant], allowed: list[str] | None = None
+) -> None:
+    """Spread Display variants across distinct templates so a batch doesn't render
+    as N copies of the same layout (the LLM tends to pick one favourite), AND keep
+    every template within the caller's allowlist. A variant already in the pool and
+    unused is kept; anything else is rotated to the next unused pooled template, in
+    registry order. Deterministic and in-place.
+    """
+    pool = resolve_template_pool(allowed)
+    used: set[str] = set()
+    for v in variants:
+        spec = v.spec
+        if not isinstance(spec, DisplayRenderSpec):
+            continue
+        tid = spec.template_id
+        if tid not in pool or tid in used:
+            nxt = next((t for t in pool if t not in used), None)
+            if nxt is not None and nxt != tid:
+                tid = nxt
+                v.spec = spec.model_copy(update={"template_id": nxt})
+            elif tid not in pool:
+                tid = pool[0]
+                v.spec = spec.model_copy(update={"template_id": pool[0]})
+        used.add(tid)
+
+
 def generate_variants_for_format(
     inp: GenerationInput, fmt: AdFormat, llm: LlmProvider
 ) -> list[Variant]:
@@ -330,4 +387,6 @@ def generate_variants_for_format(
         variant = generate_one(inp, fmt, plan, llm)
         if variant is not None:
             out.append(variant)
+    if fmt == AdFormat.display:
+        _diversify_display_templates(out, inp.allowed_templates)
     return out

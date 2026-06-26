@@ -22,6 +22,31 @@ const ImageSpec = z.object({
   url: z.string().nullable(),
 });
 
+/**
+ * How the background image is treated before copy is laid over it. The LLM picks
+ * from this fixed set (never freehand); deterministic code applies the effect.
+ * Makes a generic stock photo read as intentional and on-brand:
+ *  - none:        image as-is
+ *  - scrim:       dark bottom-up gradient (legibility for overlaid copy)
+ *  - brand_wash:  translucent brand-primary wash over the image (on-brand tint)
+ */
+export const IMAGE_TREATMENTS = ["none", "scrim", "brand_wash"] as const;
+export const ImageTreatment = z.enum(IMAGE_TREATMENTS);
+export type ImageTreatment = z.infer<typeof ImageTreatment>;
+
+/**
+ * The Display template ids — the canonical, client-safe list (no `server-only`
+ * deps), so UI dropdowns + PATCH validation share one source of truth. MUST stay
+ * in sync with the renderer registry and services/ai `templates.py`.
+ */
+export const DISPLAY_TEMPLATE_IDS = [
+  "split_image_left",
+  "image_overlay_bottom",
+  "bold_centered",
+  "minimal_left_rule",
+] as const;
+export type DisplayTemplateId = (typeof DISPLAY_TEMPLATE_IDS)[number];
+
 export const DisplayRenderSpec = z.object({
   format: z.literal("display"),
   template_id: z.string(),
@@ -33,6 +58,8 @@ export const DisplayRenderSpec = z.object({
   /** reference into the brand kit, e.g. "brand_kit.primary". */
   palette_ref: z.string().nullable(),
   image: ImageSpec.nullable(),
+  /** Deterministic image treatment; defaults to none for legacy specs. */
+  image_treatment: ImageTreatment.default("none"),
   /** the strategy this variant exploits, e.g. "gap:trust+speed". */
   angle: z.string(),
 });

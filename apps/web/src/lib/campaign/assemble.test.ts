@@ -24,6 +24,7 @@ const profile: ClientProfile = {
   offer: null,
   price_positioning: "mid",
   brand_kit: null,
+  use_ai_backgrounds: true,
   derived: null,
   created_at: null,
   updated_at: null,
@@ -53,6 +54,7 @@ const displaySpec: RenderSpec = {
   cta: "Book Free Consult",
   palette_ref: null,
   image: null,
+  image_treatment: "none",
   angle: "gap:same-week availability nobody advertises",
 };
 

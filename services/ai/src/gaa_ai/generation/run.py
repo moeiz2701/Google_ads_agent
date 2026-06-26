@@ -20,7 +20,11 @@ import logging
 from datetime import datetime, timezone
 
 from gaa_ai.generation.critique import MAX_REGEN, critique_variant
-from gaa_ai.generation.generate import _plan_axes, generate_one
+from gaa_ai.generation.generate import (
+    _diversify_display_templates,
+    _plan_axes,
+    generate_one,
+)
 from gaa_ai.llm.base import LlmProvider
 from gaa_ai.llm.factory import get_llm
 from gaa_ai.schemas import GenerationInput, GenerationResult, Variant
@@ -84,6 +88,11 @@ def generate_variants(
             resolved = _resolve_variant(inp, fmt, plan, llm, initial)
             if resolved is not None:
                 variants.append(resolved)
+
+    # Spread Display variants across distinct templates within the allowlist, so a
+    # batch isn't N copies of one layout (done post-critique: layout choice doesn't
+    # affect the copy/policy critique).
+    _diversify_display_templates(variants, inp.allowed_templates)
 
     return GenerationResult(
         variants=variants,

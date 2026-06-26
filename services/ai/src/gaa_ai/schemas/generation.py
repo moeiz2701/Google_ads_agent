@@ -35,6 +35,9 @@ class GenerationInput(BaseModel):
     formats: list[AdFormat] = Field(default_factory=lambda: [AdFormat.search, AdFormat.display])
     # Variants to produce per format, spread across deliberate axes (§5.4).
     n_per_format: int = Field(default=3, ge=1, le=10)
+    # Optional Display template allowlist (a subset of templates.py). Empty/None =
+    # all templates. The LLM still only selects a layout; this just limits the set.
+    allowed_templates: list[str] | None = None
 
 
 class CritiqueScore(BaseModel):

@@ -32,6 +32,22 @@ function isPrivateIp(ip: string): boolean {
   return false;
 }
 
+/**
+ * SSRF guard: allow only http/https and verify the host resolves to a PUBLIC
+ * address before we connect. Shared by the page fetcher and the CSS fetcher.
+ */
+export async function assertPublicUrl(url: URL): Promise<void> {
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new FetchSiteError(`Only http/https URLs are allowed`);
+  }
+  const { address } = await lookup(url.hostname).catch(() => {
+    throw new FetchSiteError(`Could not resolve host: ${url.hostname}`);
+  });
+  if (isPrivateIp(address)) {
+    throw new FetchSiteError(`Refusing to fetch a private/internal address`);
+  }
+}
+
 export async function fetchSiteHtml(rawUrl: string): Promise<string> {
   let url: URL;
   try {
@@ -39,17 +55,7 @@ export async function fetchSiteHtml(rawUrl: string): Promise<string> {
   } catch {
     throw new FetchSiteError(`Invalid URL: ${rawUrl}`);
   }
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new FetchSiteError(`Only http/https URLs are allowed`);
-  }
-
-  // Resolve and verify the destination is a public address before connecting.
-  const { address } = await lookup(url.hostname).catch(() => {
-    throw new FetchSiteError(`Could not resolve host: ${url.hostname}`);
-  });
-  if (isPrivateIp(address)) {
-    throw new FetchSiteError(`Refusing to fetch a private/internal address`);
-  }
+  await assertPublicUrl(url);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);

@@ -44,6 +44,9 @@ export const ClientProfile = z.object({
 
   // Design language
   brand_kit: BrandKit.nullable(),
+  /** Render preference: may the Display renderer use AI-generated backgrounds
+   *  (when IMAGE_GEN is configured)? Defaults true; legacy rows behave as before. */
+  use_ai_backgrounds: z.boolean().default(true),
 
   // Tier 3 — auto-derived, user-confirmed
   derived: DerivedProfile.nullable(),
@@ -61,6 +64,8 @@ export const ClientProfileInput = ClientProfile.omit({
   client_id: true,
   created_at: true,
   updated_at: true,
+  // Render pref edited later via PATCH (DB default true), not at onboarding.
+  use_ai_backgrounds: true,
 }).extend({
   competitors: z.array(z.string()).nullish(),
   usp: z.string().nullish(),

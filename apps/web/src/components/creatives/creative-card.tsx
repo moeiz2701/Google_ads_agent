@@ -3,20 +3,41 @@ import { Card } from "@/components/ui/primitives";
 import { DisplayPreview } from "./display-preview";
 
 /**
- * Text preview of a generated render-spec. Actual pixel rendering (Satori
- * templates / RSA preview) lands in Phase 4 — for now we show the structured
- * content and which insight/gap it exploits (§9.8 traceability).
+ * One generated variant. Search variants show their RSA assets as text (no
+ * canvas); Display variants show the rendered PNG with size + per-variant template
+ * controls and the resolved background source.
  */
-export function CreativeCard({ creative }: { creative: CreativeRecord }) {
+
+/** Indicative label for where a Display creative's background comes from — derived
+ *  from the spec + client setting (no extra render, so AI isn't re-billed). */
+function backgroundSource(
+  spec: Extract<CreativeRecord["spec"], { format: "display" }>,
+  aiBackgroundsActive: boolean,
+): string {
+  if (spec.image?.url) return "preset image";
+  if (!spec.image?.query) return "brand gradient";
+  return aiBackgroundsActive ? "AI-generated" : "stock photo";
+}
+
+export function CreativeCard({
+  creative,
+  aiBackgroundsActive,
+}: {
+  creative: CreativeRecord;
+  aiBackgroundsActive: boolean;
+}) {
   const { spec } = creative;
   return (
     <Card className="space-y-3">
-      <div className="flex items-center justify-between">
-        <span className="rounded-full border border-border px-2 py-0.5 text-xs uppercase tracking-wide text-muted">
+      <div className="flex items-center justify-between gap-2">
+        <span className="border border-border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">
           {spec.format}
         </span>
         {creative.insight_ref && (
-          <span className="text-xs text-success" title="Insight this variant exploits">
+          <span
+            className="truncate font-mono text-[11px] text-accent"
+            title="Insight this variant exploits"
+          >
             ◆ {creative.insight_ref}
           </span>
         )}
@@ -25,19 +46,23 @@ export function CreativeCard({ creative }: { creative: CreativeRecord }) {
       {spec.format === "search" ? (
         <div className="space-y-2">
           <div>
-            <p className="text-xs font-medium text-muted">Headlines</p>
-            <ul className="mt-1 space-y-0.5 text-sm">
+            <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">
+              Headlines
+            </p>
+            <ul className="mt-1 space-y-0.5 text-sm text-ink-2">
               {spec.headlines.slice(0, 6).map((h, i) => (
                 <li key={i} className="truncate">
                   {h.text}
-                  {h.pin && <span className="text-muted"> · pin {h.pin}</span>}
+                  {h.pin && <span className="text-ink-3"> · pin {h.pin}</span>}
                 </li>
               ))}
             </ul>
           </div>
           <div>
-            <p className="text-xs font-medium text-muted">Descriptions</p>
-            <ul className="mt-1 space-y-0.5 text-sm text-muted">
+            <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">
+              Descriptions
+            </p>
+            <ul className="mt-1 space-y-0.5 text-sm text-ink-3">
               {spec.descriptions.map((d, i) => (
                 <li key={i}>{d.text}</li>
               ))}
@@ -46,9 +71,13 @@ export function CreativeCard({ creative }: { creative: CreativeRecord }) {
         </div>
       ) : (
         <div className="space-y-2">
-          <DisplayPreview creativeId={creative.id} />
-          <p className="text-xs text-muted">
-            {spec.template_id} · {spec.headline} · CTA: {spec.cta}
+          <DisplayPreview
+            creativeId={creative.id}
+            templateId={spec.template_id}
+            sourceLabel={backgroundSource(spec, aiBackgroundsActive)}
+          />
+          <p className="font-mono text-[11px] tracking-[0.05em] text-ink-3">
+            {spec.headline} · CTA: {spec.cta}
           </p>
         </div>
       )}

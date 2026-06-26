@@ -22,6 +22,15 @@ const serverSchema = z.object({
   // Python AI service (Module 2 analysis, Module 3 generation).
   AI_SERVICE_URL: z.string().url().default("http://localhost:8000"),
 
+  // AI background-image generation (Module 4 rendering). Provider-abstracted,
+  // OFF by default — when "none" (or the key is missing) the renderer keeps its
+  // stock-photo / brand-gradient behavior. Set "gemini" + GEMINI_API_KEY to enable.
+  // Generated images are cached in the IMAGE_GEN_BUCKET Supabase Storage bucket
+  // (keyed by a brand+query+treatment hash) so each unique brief generates once.
+  IMAGE_GEN_PROVIDER: z.enum(["none", "gemini"]).default("none"),
+  IMAGE_GEN_MODEL: z.string().default("imagen-3.0-generate-002"),
+  IMAGE_GEN_BUCKET: z.string().default("generated-creatives"),
+
   // Google Ads (Module 5 execution; MVP = TEST account). All optional — when any
   // is missing the execution layer falls back to the mock client.
   GOOGLE_ADS_DEVELOPER_TOKEN: z.string().optional(),

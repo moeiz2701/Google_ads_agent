@@ -23,6 +23,12 @@ class ImageSpec(BaseModel):
     url: str | None = None
 
 
+# Deterministic image treatments the renderer applies (mirror render-spec.ts
+# IMAGE_TREATMENTS). Kept as a plain str on the model (lenient parse, like
+# template_id); generation coerces an unknown value to "none" before validation.
+IMAGE_TREATMENTS: tuple[str, ...] = ("none", "scrim", "brand_wash")
+
+
 class DisplayRenderSpec(BaseModel):
     format: Literal["display"] = "display"
     template_id: str
@@ -32,6 +38,7 @@ class DisplayRenderSpec(BaseModel):
     cta: str
     palette_ref: str | None = None
     image: ImageSpec | None = None
+    image_treatment: str = "none"
     angle: str
 
 

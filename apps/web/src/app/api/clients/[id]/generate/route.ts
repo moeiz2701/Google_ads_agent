@@ -1,17 +1,26 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { z } from "zod";
+import { DISPLAY_TEMPLATE_IDS } from "@gaa/shared";
 import { getClientProfile } from "@/lib/db/clients";
 import { getLatestAnalysis } from "@/lib/db/analyses";
 import { saveCreatives } from "@/lib/db/creatives";
-import { generateVariants, AiServiceError } from "@/lib/ai/client";
+import { generateVariants, AiServiceError, type GenerateOptions } from "@/lib/ai/client";
 import { logAction } from "@/lib/db/audit";
 import { handleRouteError, jsonError } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const maxDuration = 180;
 
+/** Generation options the UI may send (all optional → current defaults). */
+const Options = z.object({
+  nPerFormat: z.number().int().min(1).max(10).optional(),
+  formats: z.array(z.enum(["search", "display"])).optional(),
+  allowedTemplates: z.array(z.enum(DISPLAY_TEMPLATE_IDS)).optional(),
+});
+
 /** POST /api/clients/:id/generate — generate variants from the latest analysis. */
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string } },
 ) {
   try {
@@ -23,7 +32,12 @@ export async function POST(
       return jsonError(409, "Run competitor analysis before generating variants.");
     }
 
-    const result = await generateVariants(client, analysis);
+    // Body is optional; parse defensively so the no-options POST still works.
+    const body = await req.json().catch(() => ({}));
+    const opts = Options.safeParse(body);
+    const options: GenerateOptions = opts.success ? opts.data : {};
+
+    const result = await generateVariants(client, analysis, options);
     const saved = await saveCreatives(client.client_id, result.variants);
     await logAction({
       action: "variants.generated",

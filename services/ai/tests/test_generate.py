@@ -121,6 +121,19 @@ def test_invalid_template_id_coerced() -> None:
     assert out[0].spec.template_id == DEFAULT_TEMPLATE_ID
 
 
+def test_allowed_templates_honored() -> None:
+    # The FakeLlm always returns split_image_left; with an allowlist excluding it,
+    # every Display variant must be rotated into the allowed set.
+    allowed = ["bold_centered", "minimal_left_rule"]
+    inp = GenerationInput(
+        client=CLIENT, analysis=ANALYSIS, n_per_format=3, allowed_templates=allowed
+    )
+    out = generate_variants_for_format(inp, AdFormat.display, _display_llm())
+    for v in out:
+        assert isinstance(v.spec, DisplayRenderSpec)
+        assert v.spec.template_id in allowed
+
+
 def test_display_authoring_size_pinned() -> None:
     out = generate_variants_for_format(_inp(n=1), AdFormat.display, _display_llm())
     assert isinstance(out[0].spec, DisplayRenderSpec)

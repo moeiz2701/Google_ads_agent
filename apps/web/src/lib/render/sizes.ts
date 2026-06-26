@@ -33,6 +33,8 @@ export interface SizeProfile {
   stack: "row" | "column";
   /** Whether there is enough room to show a subhead at all. */
   showSubhead: boolean;
+  /** Whether there is room for a brand logo (skip on short banners). */
+  showLogo: boolean;
 }
 
 const SHORT_EDGE_MIN_FOR_SUBHEAD = 90;
@@ -71,6 +73,8 @@ function profileFor(size: DisplaySize): SizeProfile {
     pad,
     stack,
     showSubhead: shortEdge >= SHORT_EDGE_MIN_FOR_SUBHEAD,
+    // Logos crowd short/wide banners; show only where there's real vertical room.
+    showLogo: cls !== "leaderboard" && shortEdge >= SHORT_EDGE_MIN_FOR_SUBHEAD,
   };
 }
 

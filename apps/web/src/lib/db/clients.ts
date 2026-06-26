@@ -1,5 +1,6 @@
 import "server-only";
 import {
+  type BrandKit,
   ClientProfile,
   type ClientProfileInput,
   emptyBrandKit,
@@ -25,6 +26,7 @@ type ClientRow = {
   offer: string | null;
   price_positioning: string | null;
   brand_kit: unknown;
+  use_ai_backgrounds: boolean | null;
   derived: unknown;
   created_at: string | null;
   updated_at: string | null;
@@ -44,6 +46,7 @@ function rowToProfile(row: ClientRow): ClientProfile {
     offer: row.offer,
     price_positioning: row.price_positioning,
     brand_kit: row.brand_kit ?? null,
+    use_ai_backgrounds: row.use_ai_backgrounds ?? true,
     derived: row.derived ?? null,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -88,6 +91,31 @@ export async function listClientProfiles(): Promise<ClientProfile[]> {
 
   if (error) throw new Error(`Failed to list clients: ${error.message}`);
   return (data as ClientRow[]).map(rowToProfile);
+}
+
+/**
+ * Update editable design/render settings on a client: the design-language brand
+ * kit and/or the AI-background preference. Only the provided fields are written.
+ */
+export async function updateClientSettings(
+  id: string,
+  patch: { brand_kit?: BrandKit; use_ai_backgrounds?: boolean },
+): Promise<ClientProfile | null> {
+  const fields: Record<string, unknown> = {};
+  if (patch.brand_kit !== undefined) fields.brand_kit = patch.brand_kit;
+  if (patch.use_ai_backgrounds !== undefined) {
+    fields.use_ai_backgrounds = patch.use_ai_backgrounds;
+  }
+  if (Object.keys(fields).length === 0) return getClientProfile(id);
+
+  const { data, error } = await getServiceClient()
+    .from("clients")
+    .update(fields)
+    .eq("id", id)
+    .select("*")
+    .maybeSingle();
+  if (error) throw new Error(`Failed to update client: ${error.message}`);
+  return data ? rowToProfile(data as ClientRow) : null;
 }
 
 export async function getClientProfile(

@@ -29,6 +29,7 @@ const profile: ClientProfile = {
     tone: "clinical-reassuring",
     do_not_use: ["before/after"],
   },
+  use_ai_backgrounds: true,
   derived: null,
   created_at: null,
   updated_at: null,
@@ -58,6 +59,7 @@ const cleanDisplay: RenderSpec = {
   cta: "Book Free Consult",
   palette_ref: null,
   image: null,
+  image_treatment: "none",
   angle: "gap:same-week",
 };
 
