@@ -29,6 +29,8 @@ test("validate every stored client row", async () => {
       goal: row.goal,
       budget: row.budget,
       geo: row.geo,
+      category: row.category ?? null,
+      country: row.country ?? null,
       competitors: row.competitors ?? null,
       usp: row.usp,
       offer: row.offer,

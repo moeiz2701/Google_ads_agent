@@ -16,6 +16,8 @@ const profile: ClientProfile = {
   website: "https://glowskin.example.com",
   destination_url: "https://glowskin.example.com/botox",
   goal: "leads",
+  category: "Medical Spa",
+  country: "US",
   budget: { type: "daily", amount: 50, currency: "USD" },
   geo: ["Los Angeles", "Pasadena"],
   competitors: null,

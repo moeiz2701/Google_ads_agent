@@ -28,11 +28,13 @@ Split of responsibility (deliberate, leakage-aware):
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from urllib.parse import urlparse
 
 from pydantic import BaseModel
 
+from gaa_ai.config import get_settings
 from gaa_ai.llm.base import LlmProvider
 from gaa_ai.schemas import (
     AdNetwork,
@@ -115,6 +117,30 @@ _CREATIVE_PROMPT = (
     "before_after (is it a before/after comparison?), product_vs_lifestyle, "
     "text_density (low/medium/high), tone, and dominant_colors."
 )
+
+_VISION_INSIGHTS_SYSTEM = (
+    "You are an advertising analyst reading a single competitor ad shown as an "
+    "IMAGE (a rendered Google ad creative). Extract the messaging visible in the "
+    "image. Report only what the ad actually shows; use null when a field is not "
+    "present. Do not infer pricing or offers that are not shown."
+)
+
+# No .format() placeholders here, so literal braces are fine (unlike _INSIGHTS_PROMPT).
+_VISION_INSIGHTS_PROMPT = """\
+Read this competitor ad image and extract its structured marketing signals.
+
+Return:
+- primary_value_prop: the single core promise (short phrase)
+- emotional_hook: the feeling the ad targets (e.g. trust, urgency, aspiration)
+- implied_persona: who this ad is written for (short description)
+- claims: factual/marketing claims made (list of short strings)
+- cta_verb: the call-to-action verb (e.g. "Book", "Schedule"), null if none
+- offer_type: e.g. "free consult", "first-visit discount", "membership", null if none
+- price_points: any explicit prices/discounts shown (list, e.g. ["$9/unit", "50% off"])
+- promotion_cadence: e.g. "limited-time", "ongoing", "seasonal", null if unclear
+- repeated_phrases: 2-4 word phrases likely useful as keyword seeds (list)
+- platforms: which networks this maps to, from {search, display, youtube}
+"""
 
 
 def _days_running(first: date | None, last: date | None) -> int | None:
@@ -236,33 +262,8 @@ def _deterministic_record(raw: RawAd) -> EnrichedAdRecord:
     )
 
 
-def enrich_ad(raw: RawAd, llm: LlmProvider, *, today: date | None = None) -> EnrichedAdRecord:
-    """Enrich one ad. ``today`` is accepted for signature symmetry / future use
-    (e.g. recency) and to keep enrichment a pure function of its inputs.
-
-    Deterministic fields are always set. LLM interpretation is best-effort: on
-    any LLM failure the record is returned with deterministic fields only.
-    """
-    record = _deterministic_record(raw)
-
-    # VISION (Display only, guarded).
-    record.creative = _enrich_creative(raw, llm)
-
-    # TEXT -> structured (one LLM call). Degrade gracefully on failure.
-    if not (raw.headline or raw.body):
-        return record
-    prompt = _INSIGHTS_PROMPT.format(
-        advertiser=raw.advertiser,
-        fmt=raw.format,
-        headline=raw.headline,
-        body=raw.body,
-    )
-    try:
-        insights = llm.generate_json(prompt, _AdInsights, system=_INSIGHTS_SYSTEM)
-    except Exception as exc:  # noqa: BLE001 — one bad ad must not kill the corpus
-        logger.warning("LLM enrichment failed for %s: %s", raw.ad_id, exc)
-        return record
-
+def _apply_insights(record: EnrichedAdRecord, insights: _AdInsights) -> None:
+    """Overlay the LLM-interpreted fields onto a deterministic record."""
     record.primary_value_prop = insights.primary_value_prop
     record.emotional_hook = insights.emotional_hook
     record.implied_persona = insights.implied_persona
@@ -273,11 +274,87 @@ def enrich_ad(raw: RawAd, llm: LlmProvider, *, today: date | None = None) -> Enr
     record.promotion_cadence = insights.promotion_cadence
     record.repeated_phrases = insights.repeated_phrases
     record.platforms = insights.platforms
+
+
+def _extract_insights(raw: RawAd, llm: LlmProvider) -> _AdInsights | None:
+    """Interpret the ad's messaging. TEXT path when copy exists; otherwise VISION
+    on the rendered image (live Transparency ads arrive as images with no copy —
+    the only way to read their messaging). Returns None (logged) on failure so the
+    record degrades to deterministic-only and never sinks the corpus.
+    """
+    if raw.headline or raw.body:
+        prompt = _INSIGHTS_PROMPT.format(
+            advertiser=raw.advertiser,
+            fmt=raw.format,
+            headline=raw.headline,
+            body=raw.body,
+        )
+        try:
+            return llm.generate_json(prompt, _AdInsights, system=_INSIGHTS_SYSTEM)
+        except Exception as exc:  # noqa: BLE001 — one bad ad must not kill the corpus
+            logger.warning("LLM text enrichment failed for %s: %s", raw.ad_id, exc)
+            return None
+
+    if _is_real_image_url(raw.image_url):
+        assert raw.image_url is not None  # narrowed by _is_real_image_url
+        try:
+            return llm.tag_image(
+                raw.image_url,
+                _VISION_INSIGHTS_PROMPT,
+                _AdInsights,
+                system=_VISION_INSIGHTS_SYSTEM,
+            )
+        except Exception as exc:  # noqa: BLE001 — one bad ad must not kill the corpus
+            logger.warning("vision enrichment failed for %s: %s", raw.ad_id, exc)
+            return None
+
+    return None
+
+
+def enrich_ad(raw: RawAd, llm: LlmProvider, *, today: date | None = None) -> EnrichedAdRecord:
+    """Enrich one ad. ``today`` is accepted for signature symmetry / future use
+    (e.g. recency) and to keep enrichment a pure function of its inputs.
+
+    Deterministic fields are always set. LLM interpretation is best-effort: text
+    copy is read directly, image-only ads (live Transparency creatives) are read
+    via vision, and any failure degrades the record to deterministic-only.
+    """
+    record = _deterministic_record(raw)
+
+    # VISION (Display visual attributes only, guarded).
+    record.creative = _enrich_creative(raw, llm)
+
+    # INTERPRETATION: text-or-vision -> structured insights. Degrade gracefully.
+    insights = _extract_insights(raw, llm)
+    if insights is not None:
+        _apply_insights(record, insights)
     return record
 
 
 def enrich_corpus(
-    raws: list[RawAd], llm: LlmProvider, *, today: date | None = None
+    raws: list[RawAd],
+    llm: LlmProvider,
+    *,
+    today: date | None = None,
+    concurrency: int | None = None,
 ) -> list[EnrichedAdRecord]:
-    """MAP over the corpus. Per-ad failures are isolated (graceful degradation)."""
-    return [enrich_ad(raw, llm, today=today) for raw in raws]
+    """MAP over the corpus CONCURRENTLY, preserving input order.
+
+    Each ad is one (or two, with vision) blocking LLM call; a large live corpus
+    (up to ~100 ads) would take minutes run sequentially and blow the request
+    timeout. We fan out over a bounded thread pool — the calls are I/O-bound
+    (HTTP to the model), so threads give near-linear speedup. ``enrich_ad`` already
+    degrades a failed ad to deterministic-only, so one bad ad never sinks the run.
+
+    ``concurrency`` defaults to ``settings.enrich_concurrency``; 1 forces the
+    sequential path (used by determinism-sensitive tests).
+    """
+    if not raws:
+        return []
+    workers = concurrency if concurrency is not None else get_settings().enrich_concurrency
+    workers = max(1, min(workers, len(raws)))
+    if workers == 1:
+        return [enrich_ad(raw, llm, today=today) for raw in raws]
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        # pool.map preserves order; exceptions inside enrich_ad are already handled.
+        return list(pool.map(lambda raw: enrich_ad(raw, llm, today=today), raws))

@@ -9,6 +9,7 @@ import type {
   DerivedProfile,
   PricePositioning,
 } from "@gaa/shared";
+import { BUSINESS_CATEGORY_GROUPS, COUNTRIES, DEFAULT_COUNTRY } from "@gaa/shared";
 import {
   Button,
   Card,
@@ -19,8 +20,12 @@ import {
   Textarea,
 } from "@/components/ui/primitives";
 
+// Sentinel <Select> value for the "type my own category" path.
+const CATEGORY_OTHER = "__other__";
+
 type ExtractResponse = {
   suggested_name: string | null;
+  category: string | null;
   derived: DerivedProfile;
   brand_kit: Pick<BrandKit, "palette" | "fonts" | "tone">;
   logo_url: string | null;
@@ -46,10 +51,16 @@ export function OnboardingForm() {
   const [name, setName] = useState("");
   const [destinationUrl, setDestinationUrl] = useState("");
   const [goal, setGoal] = useState<CampaignGoal>("leads");
+  // Category: select value is a taxonomy label or CATEGORY_OTHER; the free-text
+  // box (categoryCustom) is only used on the "Other…" path.
+  const [category, setCategory] = useState("");
+  const [categoryCustom, setCategoryCustom] = useState("");
   const [budgetType, setBudgetType] = useState<"daily" | "total">("daily");
   const [budgetAmount, setBudgetAmount] = useState("50");
   const [currency, setCurrency] = useState("USD");
+  // Target cities for ad serving; country scopes competitor discovery.
   const [geo, setGeo] = useState("");
+  const [country, setCountry] = useState(DEFAULT_COUNTRY);
 
   // Tier 2 (optional, high-leverage)
   const [usp, setUsp] = useState("");
@@ -89,6 +100,9 @@ export function OnboardingForm() {
       if (!res.ok) throw new Error(data.error ?? "Analysis failed");
       const r = data as ExtractResponse;
       if (r.suggested_name && !name) setName(r.suggested_name);
+      // The API only returns a category when it's an exact taxonomy label, so it's
+      // safe to select directly. Leave the picker untouched if none was detected.
+      if (r.category) setCategory(r.category);
       setOfferings(arrayToCsv(r.derived.offerings));
       setValueProps(arrayToCsv(r.derived.value_props));
       setPersonas(arrayToCsv(r.derived.personas));
@@ -113,11 +127,15 @@ export function OnboardingForm() {
 
   function buildPayload(): ClientProfileInput {
     const hexOrNull = (v: string) => (/^#[0-9a-fA-F]{3,6}$/.test(v) ? v : null);
+    const categoryValue =
+      category === CATEGORY_OTHER ? categoryCustom.trim() || null : category || null;
     return {
       name: name.trim(),
       website: website.trim(),
       destination_url: destinationUrl.trim(),
       goal,
+      category: categoryValue,
+      country: country || DEFAULT_COUNTRY,
       budget: {
         type: budgetType,
         amount: Number(budgetAmount),
@@ -166,7 +184,19 @@ export function OnboardingForm() {
       return;
     }
     if (csvToArray(geo).length === 0) {
-      setError("Add at least one geographic target.");
+      setError("Add at least one target city.");
+      return;
+    }
+    if (!country) {
+      setError("Select a country — it scopes competitor ad discovery.");
+      return;
+    }
+    if (!category) {
+      setError("Select a business category — it powers competitor ad discovery.");
+      return;
+    }
+    if (category === CATEGORY_OTHER && !categoryCustom.trim()) {
+      setError("Type your business category, or pick one from the list.");
       return;
     }
     if (!(Number(budgetAmount) > 0)) {
@@ -247,6 +277,40 @@ export function OnboardingForm() {
             </Select>
           </Field>
           <Field
+            label="Business category"
+            htmlFor="category"
+            required
+            hint="Auto-detected from the website — confirm or change. Drives competitor ad discovery."
+          >
+            <div className="space-y-2">
+              <Select
+                id="category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+              >
+                <option value="">Select a category…</option>
+                {BUSINESS_CATEGORY_GROUPS.map((grp) => (
+                  <optgroup key={grp.group} label={grp.group}>
+                    {grp.categories.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+                <option value={CATEGORY_OTHER}>Other…</option>
+              </Select>
+              {category === CATEGORY_OTHER && (
+                <Input
+                  aria-label="Custom business category"
+                  placeholder="Type the business category"
+                  value={categoryCustom}
+                  onChange={(e) => setCategoryCustom(e.target.value)}
+                />
+              )}
+            </div>
+          </Field>
+          <Field
             label="Destination URL"
             htmlFor="dest"
             required
@@ -261,12 +325,30 @@ export function OnboardingForm() {
             />
           </Field>
           <Field
-            label="Geographic targets"
+            label="Target cities"
             htmlFor="geo"
             required
-            hint="Comma-separated, e.g. Los Angeles, Pasadena"
+            hint="Comma-separated cities where ads serve, e.g. Los Angeles, Pasadena"
           >
             <Input id="geo" value={geo} onChange={(e) => setGeo(e.target.value)} required />
+          </Field>
+          <Field
+            label="Country"
+            htmlFor="country"
+            required
+            hint="Scopes competitor ad discovery to same-market advertisers."
+          >
+            <Select
+              id="country"
+              value={country}
+              onChange={(e) => setCountry(e.target.value)}
+            >
+              {COUNTRIES.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.name}
+                </option>
+              ))}
+            </Select>
           </Field>
           <Field label="Budget type" htmlFor="budgetType" required>
             <Select

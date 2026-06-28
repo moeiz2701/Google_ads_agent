@@ -17,7 +17,16 @@ from gaa_ai.schemas import ClientContext, RawAd
 
 
 class ScrapeError(Exception):
-    pass
+    """A scrape failed. The caller may fall back to the cached corpus."""
+
+
+class NoRelevantAdsError(ScrapeError):
+    """Discovery reached the source but the country/relevance filters left too
+    few usable ads. ACTIONABLE (change category or location) — the caller must
+    NOT silently fall back to the cached corpus; it is surfaced to the user.
+    Subclasses ScrapeError so existing ``except ScrapeError`` sites still catch
+    it, but the fallback sites re-raise it explicitly.
+    """
 
 
 @runtime_checkable

@@ -16,28 +16,33 @@ from gaa_ai.llm.base import LlmProvider
 from gaa_ai.llm.factory import get_llm
 from gaa_ai.pipeline.aggregate import aggregate
 from gaa_ai.pipeline.enrich import enrich_corpus
+from gaa_ai.pipeline.relevance import filter_relevant
 from gaa_ai.schemas import AnalysisInput, AnalysisObject, RawAd
-from gaa_ai.scrape import ScrapeError, get_ad_source
+from gaa_ai.scrape import NoRelevantAdsError, ScrapeError, get_ad_source
 
 logger = logging.getLogger("gaa_ai.pipeline.run")
 
 
-def _fetch_corpus(inp: AnalysisInput, max_ads: int) -> list[RawAd]:
-    """Fetch the corpus, falling back to the cached source on live failure.
+def _fetch_corpus(inp: AnalysisInput, max_ads: int) -> tuple[list[RawAd], bool]:
+    """Fetch the corpus. Returns ``(corpus, used_live)`` so the caller knows
+    whether to apply the live-only relevance funnel.
 
-    Graceful degradation: a live ScrapeError must not fail the request — the
-    cached demo corpus always exists, so we log a warning and use it.
+    Graceful degradation: an INFRA ScrapeError (unreachable/blocked source) must
+    not fail the request — the cached demo corpus always exists, so we log and
+    fall back. A NoRelevantAdsError is different: discovery REACHED the source but
+    the country filter emptied it, so it is actionable and propagates (no silent
+    fallback to unrelated cached ads).
     """
-    source = get_ad_source(use_cached=inp.use_cached_corpus)
+    if inp.use_cached_corpus:
+        return get_ad_source(use_cached=True).fetch(inp.client, max_ads), False
+    source = get_ad_source(use_cached=False)
     try:
-        return source.fetch(inp.client, max_ads)
+        return source.fetch(inp.client, max_ads), True
+    except NoRelevantAdsError:
+        raise  # reached the source, nothing in-market — surface it, do not fall back
     except ScrapeError as exc:
-        if inp.use_cached_corpus:
-            # Cached path failing is a real error (fixture missing/corrupt).
-            raise
         logger.warning("live scrape failed (%s); falling back to cached corpus", exc)
-        cached = get_ad_source(use_cached=True)
-        return cached.fetch(inp.client, max_ads)
+        return get_ad_source(use_cached=True).fetch(inp.client, max_ads), False
 
 
 def run_analysis(inp: AnalysisInput, llm: LlmProvider | None = None) -> AnalysisObject:
@@ -54,8 +59,20 @@ def run_analysis(inp: AnalysisInput, llm: LlmProvider | None = None) -> Analysis
     cap = inp.max_ads if inp.max_ads is not None else settings.max_corpus_size
     max_ads = min(cap, settings.max_corpus_size)
 
-    corpus = _fetch_corpus(inp, max_ads)
+    corpus, used_live = _fetch_corpus(inp, max_ads)
     records = enrich_corpus(corpus, llm)
+
+    # Live funnel, stage 2: drop off-topic ads, then require a relevant floor.
+    # The cached demo corpus is curated, so it skips the gate entirely.
+    if used_live:
+        records = filter_relevant(records, inp.client, llm)
+        if len(records) < settings.relevance_min_ads:
+            geo = ", ".join(inp.client.geo) or "the selected location"
+            raise NoRelevantAdsError(
+                f"No relevant competitor ads found for {inp.client.vertical!r} in "
+                f"{geo}. Try a different category or location."
+            )
+
     analysis = aggregate(records, inp.client, llm)
 
     analysis.source_ad_count = len(records)

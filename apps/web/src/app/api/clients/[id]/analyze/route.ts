@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getClientProfile } from "@/lib/db/clients";
 import { saveAnalysis } from "@/lib/db/analyses";
-import { analyzeCompetitors, AiServiceError } from "@/lib/ai/client";
+import { analyzeCompetitors, AiServiceError, NoRelevantAdsError } from "@/lib/ai/client";
 import { logAction } from "@/lib/db/audit";
 import { handleRouteError, jsonError } from "@/lib/http";
 
@@ -30,6 +30,8 @@ export async function POST(
     });
     return NextResponse.json({ analysis, analysis_id: analysisId }, { status: 201 });
   } catch (err) {
+    // Actionable "no relevant ads" → 422 with the clean message (UI shows it as-is).
+    if (err instanceof NoRelevantAdsError) return jsonError(422, err.message);
     if (err instanceof AiServiceError) return jsonError(502, err.message);
     return handleRouteError("api/clients/:id/analyze", err);
   }

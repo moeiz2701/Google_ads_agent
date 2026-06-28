@@ -14,6 +14,9 @@ class ClientContext(BaseModel):
     name: str
     vertical: str
     geo: list[str]
+    # ISO-3166-1 alpha-2 (e.g. "US"). Drives the discovery country filter; the
+    # live source defaults a missing value to "US" (see scrape/live.py).
+    country: str | None = None
     website: str | None = None
     competitors: list[str] | None = None
     usp: str | None = None

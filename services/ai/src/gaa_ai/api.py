@@ -26,9 +26,15 @@ def health() -> dict[str, str]:
 def analyze(inp: AnalysisInput) -> AnalysisObject:
     # Imported lazily so the module loads even before the pipeline is wired.
     from gaa_ai.pipeline import run_analysis
+    from gaa_ai.scrape import NoRelevantAdsError
 
     try:
         return run_analysis(inp)
+    except NoRelevantAdsError as exc:
+        # Reached the source but the country/relevance filters emptied the corpus.
+        # Actionable (change category/location) → 422 with the clean message.
+        logger.info("analysis found no relevant ads: %s", exc)
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001 — surface a clean 502, log the cause
         logger.exception("analysis failed")
         raise HTTPException(status_code=502, detail=f"Analysis failed: {exc}") from exc

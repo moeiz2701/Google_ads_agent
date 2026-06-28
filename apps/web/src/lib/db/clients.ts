@@ -21,6 +21,8 @@ type ClientRow = {
   goal: string;
   budget: unknown;
   geo: unknown;
+  category: string | null;
+  country: string | null;
   competitors: unknown;
   usp: string | null;
   offer: string | null;
@@ -41,6 +43,8 @@ function rowToProfile(row: ClientRow): ClientProfile {
     goal: row.goal,
     budget: row.budget,
     geo: row.geo,
+    category: row.category ?? null,
+    country: row.country ?? null,
     competitors: row.competitors ?? null,
     usp: row.usp,
     offer: row.offer,
@@ -67,6 +71,8 @@ export async function createClientProfile(
       goal: input.goal,
       budget: input.budget,
       geo: input.geo,
+      category: input.category ?? null,
+      country: input.country ?? null,
       competitors: input.competitors ?? null,
       usp: input.usp ?? null,
       offer: input.offer ?? null,

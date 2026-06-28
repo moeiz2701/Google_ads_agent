@@ -16,3 +16,5 @@ export * from "./schemas/render-spec"; // 4. render_spec
 export * from "./schemas/campaign-config"; // 5. campaign_config
 export * from "./schemas/lifecycle";
 export * from "./schemas/generation"; // Module 3 generation IO
+export * from "./categories"; // business-category taxonomy (onboarding + auto-detect)
+export * from "./countries"; // country taxonomy (onboarding + discovery country filter)

@@ -191,5 +191,39 @@ def test_enrich_no_text_skips_llm() -> None:
     assert rec.primary_value_prop is None
 
 
+def test_enrich_reads_image_via_vision_when_no_copy() -> None:
+    """Live Transparency ads arrive as a rendered image with no copy: enrichment
+    must read the messaging from the image (vision) and populate insights."""
+    llm = FakeLlm(
+        {"_AdInsights": _AdInsights(primary_value_prop="Natural Glow", claims=["FDA-cleared"])}
+    )
+    raw = _raw(
+        "gtc-1",
+        source="google_transparency",
+        format="search",  # text-format Transparency ad (no creative-vision call)
+        headline=None,
+        body=None,
+        image_url="https://tpc.googlesyndication.com/archive/simgad/123",
+    )
+    rec = enrich_ad(raw, llm, today=TODAY)
+    assert rec.primary_value_prop == "Natural Glow"
+    assert rec.claims == ["FDA-cleared"]
+
+
+def test_enrich_no_text_no_real_image_stays_deterministic() -> None:
+    """No copy AND only a placeholder image -> no vision call, deterministic-only."""
+    llm = FakeLlm({"_AdInsights": _AdInsights(primary_value_prop="must not apply")})
+    raw = _raw(
+        "gtc-2",
+        source="google_transparency",
+        format="search",
+        headline=None,
+        body=None,
+        image_url="https://example-cdn.com/creative.png",  # placeholder host
+    )
+    rec = enrich_ad(raw, llm, today=TODAY)
+    assert rec.primary_value_prop is None
+
+
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-q"]))

@@ -1,6 +1,11 @@
 import "server-only";
 import { z } from "zod";
-import { BrandKit, DerivedProfile } from "@gaa/shared";
+import {
+  BrandKit,
+  BUSINESS_CATEGORY_GROUPS,
+  DerivedProfile,
+  matchCategory,
+} from "@gaa/shared";
 import { getLlm } from "@/lib/llm";
 import { fetchSiteHtml } from "@/lib/scrape/fetch-site";
 import { fetchStylesheets } from "@/lib/scrape/fetch-css";
@@ -15,9 +20,17 @@ import { extractHtmlSummary, isNoiseColor } from "@/lib/scrape/extract-html";
 /** What the LLM returns (logo is sourced from HTML, not the model). */
 const LlmExtraction = z.object({
   suggested_name: z.string().nullable(),
+  // Best-matching business category from the taxonomy (or null). Normalized to a
+  // canonical label after the call; an unknown value is dropped to null.
+  category: z.string().nullable(),
   derived: DerivedProfile,
   brand_kit: BrandKit.pick({ palette: true, fonts: true, tone: true }),
 });
+
+/** Compact, grouped list of allowed category labels for the prompt. */
+const CATEGORY_MENU = BUSINESS_CATEGORY_GROUPS.map(
+  (g) => `${g.group}: ${g.categories.join(", ")}`,
+).join("\n");
 
 export const ExtractedProfile = LlmExtraction.extend({
   logo_url: z.string().nullable(),
@@ -26,6 +39,7 @@ export type ExtractedProfile = z.infer<typeof ExtractedProfile>;
 
 const SCHEMA_HINT = `{
   "suggested_name": string | null,                       // the business name
+  "category": string | null,                             // the single best-matching category, copied EXACTLY from the provided list
   "derived": {
     "offerings": string[],                               // products/services offered
     "value_props": string[],                             // concrete benefits, not fluff
@@ -42,7 +56,10 @@ const SYSTEM =
   "You analyze a business website and extract a structured brand/offering profile " +
   "for building Google Ads. Be concrete and specific; prefer the company's own words. " +
   "If a field cannot be determined from the page, use null (or an empty array). " +
-  "Never invent offerings, prices, or claims that are not supported by the page.";
+  "Never invent offerings, prices, or claims that are not supported by the page. " +
+  "For `category`, choose the SINGLE best-matching business category and copy it " +
+  "EXACTLY (verbatim) from the provided list — do not invent a new label or alter " +
+  "wording. If none reasonably fits, use null.";
 
 export async function extractProfileFromUrl(
   websiteUrl: string,
@@ -57,6 +74,10 @@ export async function extractProfileFromUrl(
     `Website: ${websiteUrl}`,
     summary.title ? `Title: ${summary.title}` : "",
     summary.metaDescription ? `Meta description: ${summary.metaDescription}` : "",
+    "",
+    "Allowed categories (pick exactly one for `category`, copied verbatim, or null):",
+    CATEGORY_MENU,
+    "",
     summary.colorHints.length
       ? `Colors detected on page (most frequent first): ${summary.colorHints.join(", ")}. ` +
         `Base the palette on these. Near-black and off-white ARE valid brand colors — ` +
@@ -114,6 +135,9 @@ export async function extractProfileFromUrl(
 
   return {
     ...llm,
+    // Only trust the category if it's an exact taxonomy label; otherwise drop to
+    // null so the form leaves the picker for the user (rather than a junk value).
+    category: matchCategory(llm.category),
     brand_kit: { ...llm.brand_kit, palette, fonts },
     logo_url: summary.logoUrl,
   };

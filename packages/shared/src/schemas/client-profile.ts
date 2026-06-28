@@ -36,6 +36,16 @@ export const ClientProfile = z.object({
   budget: Budget,
   geo: z.array(GeoTarget).min(1),
 
+  /** Business category (from `categories.ts`, or a custom value). Auto-detected
+   *  at onboarding and user-confirmed; drives competitor ad discovery. Nullable
+   *  so legacy rows validate. */
+  category: z.string().nullable(),
+
+  /** Country (ISO-3166-1 alpha-2, from `countries.ts`). Collected at onboarding
+   *  alongside the city-level `geo` targets; drives the discovery country filter
+   *  (keep only same-market competitors). Nullable so legacy rows validate. */
+  country: z.string().nullable(),
+
   // Tier 2 — optional, high-leverage
   competitors: z.array(z.string()).nullable(),
   usp: z.string().nullable(),
@@ -67,6 +77,8 @@ export const ClientProfileInput = ClientProfile.omit({
   // Render pref edited later via PATCH (DB default true), not at onboarding.
   use_ai_backgrounds: true,
 }).extend({
+  category: z.string().nullish(),
+  country: z.string().nullish(),
   competitors: z.array(z.string()).nullish(),
   usp: z.string().nullish(),
   offer: z.string().nullish(),

@@ -21,6 +21,14 @@ const serverSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   // Python AI service (Module 2 analysis, Module 3 generation).
   AI_SERVICE_URL: z.string().url().default("http://localhost:8000"),
+  // Module 2 corpus: fetch LIVE competitor ads (Transparency Center) by default,
+  // or set true to force the deterministic cached demo corpus (safe demos / CI).
+  ANALYSIS_USE_CACHED_CORPUS: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+  // Max competitor ads to fetch/analyze per run (live path). Kept modest for cost.
+  ANALYSIS_MAX_ADS: z.coerce.number().int().positive().max(100).default(20),
 
   // AI background-image generation (Module 4 rendering). Provider-abstracted,
   // OFF by default — when "none" (or the key is missing) the renderer keeps its

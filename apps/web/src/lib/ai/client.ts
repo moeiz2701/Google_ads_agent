@@ -14,12 +14,38 @@ import { serverEnv } from "@/lib/env";
 
 export class AiServiceError extends Error {}
 
+/**
+ * Live competitor discovery reached the Transparency Center but the country +
+ * relevance filters left too few usable ads. Actionable (the user should change
+ * the category or location), so it is surfaced rather than silently degraded —
+ * distinct from a generic AiServiceError, which is an infra/transport failure.
+ */
+export class NoRelevantAdsError extends AiServiceError {}
+
 // Natural Gemini (thinking on) enriches the corpus per-ad sequentially, so a
 // real cached-corpus run is ~75s; give generous headroom over that before abort.
 const ANALYZE_TIMEOUT_MS = 180_000;
 
-/** Best-effort vertical for corpus selection; cached source falls back to med_spa. */
+/** Extract FastAPI's {"detail": "..."} message from a response body, else echo. */
+function parseDetail(body: string): string {
+  try {
+    const j = JSON.parse(body);
+    if (j && typeof j.detail === "string") return j.detail;
+  } catch {
+    /* not JSON — fall through */
+  }
+  return body.slice(0, 300) || "No relevant ads found. Try a different category or location.";
+}
+
+/**
+ * Vertical for corpus selection + analysis. Prefer the confirmed business
+ * `category` (clean label like "Medical Spa" — best for advertiser-name discovery;
+ * the Python side normalizes spaces/case for both live discovery and cached lookup).
+ * Fall back to the first offering slugified, then the med_spa demo corpus.
+ */
 function inferVertical(client: ClientProfile): string {
+  const category = client.category?.trim();
+  if (category) return category;
   const first = client.derived?.offerings?.[0];
   if (first) {
     return first.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
@@ -30,18 +56,24 @@ function inferVertical(client: ClientProfile): string {
 export async function analyzeCompetitors(
   client: ClientProfile,
 ): Promise<AnalysisObject> {
-  const { AI_SERVICE_URL } = serverEnv();
+  const { AI_SERVICE_URL, ANALYSIS_USE_CACHED_CORPUS, ANALYSIS_MAX_ADS } = serverEnv();
   const payload = {
     client: {
       name: client.name,
       vertical: inferVertical(client),
       geo: client.geo,
       website: client.website,
+      // ISO-2 market for the discovery country filter; default US (the MVP demo).
+      country: client.country ?? "US",
       competitors: client.competitors ?? null,
       usp: client.usp ?? null,
       offerings: client.derived?.offerings ?? null,
     },
-    use_cached_corpus: true,
+    // Live Transparency Center fetch by default; the AI service falls back to the
+    // cached corpus on an infra failure, but surfaces a 422 when discovery reached
+    // the source yet the country + relevance filters left too few usable ads.
+    use_cached_corpus: ANALYSIS_USE_CACHED_CORPUS,
+    max_ads: ANALYSIS_MAX_ADS,
   };
 
   const controller = new AbortController();
@@ -66,6 +98,11 @@ export async function analyzeCompetitors(
 
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
+    // 422 = discovery reached the source but filters emptied the corpus. The
+    // FastAPI body is {"detail": "<clean, user-facing message>"}; surface it as-is.
+    if (res.status === 422) {
+      throw new NoRelevantAdsError(parseDetail(detail));
+    }
     throw new AiServiceError(`AI service returned ${res.status}: ${detail.slice(0, 300)}`);
   }
 
