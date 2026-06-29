@@ -14,10 +14,11 @@ import type { LoadedFont } from "./fonts";
  */
 
 const FETCH_TIMEOUT_MS = 5_000;
-// A legacy UA so Google Fonts serves TTF `src:` urls; modern UAs get woff2, which
-// Satori cannot parse.
-const LEGACY_UA =
-  "Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/40.0 Safari/537.36";
+// Google Fonts content-negotiates the `src:` format by User-Agent. ALL browser
+// UAs — even an old Chrome/40 — now get woff/woff2, which Satori CANNOT parse, so
+// brand fonts would silently fall back to Inter. A minimal NON-browser UA still
+// gets plain TTF (`format('truetype')`); verified across the common families.
+const TTF_UA = "curl/7.0";
 
 const cache = new Map<string, LoadedFont[]>();
 
@@ -82,7 +83,7 @@ export async function loadBrandFont(family: string): Promise<LoadedFont[]> {
     "https://fonts.googleapis.com/css2?family=" +
     encodeURIComponent(key) +
     ":wght@400;700&display=swap";
-  const css = await timedFetch(api, { headers: { "User-Agent": LEGACY_UA } });
+  const css = await timedFetch(api, { headers: { "User-Agent": TTF_UA } });
   let text = "";
   if (css?.ok) {
     try {

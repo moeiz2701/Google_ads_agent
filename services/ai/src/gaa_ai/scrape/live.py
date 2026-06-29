@@ -66,11 +66,13 @@ _FORMAT_MAP = {"text": "search", "image": "display", "video": "video"}
 # when the client has no country set (legacy rows).
 _DEFAULT_COUNTRY = "US"
 
-# Bounds (keep SerpApi usage predictable: ~1 search per advertiser).
-_MAX_ADVERTISERS = 10
+# Bounds (keep SerpApi usage predictable: ~1 search per advertiser). Breadth
+# across more competitors matters more than depth for the gap map, so we keep a
+# wide advertiser set and spread the ad budget across it (~4 ads each at 60 total).
+_MAX_ADVERTISERS = 15
 # Over-fetch suggestions per query: the country filter discards out-of-market
-# advertisers, so request more than _MAX_ADVERTISERS worth to keep enough after.
-_SUGGEST_PER_QUERY = 12
+# advertisers, so request well above _MAX_ADVERTISERS to still fill it after.
+_SUGGEST_PER_QUERY = 20
 # Managed-scraper proxies (residential routing) are slow and occasionally reset
 # the connection, so allow a few extra attempts and a generous per-call timeout.
 _SUGGEST_RETRIES = 4

@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { type BrandKit, emptyBrandKit } from "@gaa/shared";
-import { Button, Card, Field, Input, SectionTitle } from "@/components/ui/primitives";
+import { type BrandKit, emptyBrandKit, type LogoBackground } from "@gaa/shared";
+import { Button, Card, Field, Input, Select, SectionTitle } from "@/components/ui/primitives";
 
 /**
  * Editable design language (brand kit) + the AI-background toggle. Saved via
@@ -29,6 +29,10 @@ export function DesignLanguageEditor({
   const router = useRouter();
   const base = initial ?? emptyBrandKit();
   const [logoUrl, setLogoUrl] = useState(base.logo_url ?? "");
+  const [logoBackground, setLogoBackground] = useState<LogoBackground>(
+    base.logo_background ?? "white",
+  );
+  const [logoError, setLogoError] = useState(false);
   const [palette, setPalette] = useState({
     primary: base.palette?.primary ?? "",
     accent: base.palette?.accent ?? "",
@@ -55,6 +59,7 @@ export function DesignLanguageEditor({
     // Preserve any discovered self-hosted font URLs; the form edits the family names.
     const brand_kit: BrandKit = {
       logo_url: logoUrl.trim() || null,
+      logo_background: logoBackground,
       palette: {
         primary: hexOrNull(palette.primary),
         accent: hexOrNull(palette.accent),
@@ -134,7 +139,54 @@ export function DesignLanguageEditor({
               <Input id="dl-body" value={body} onChange={(e) => setBody(e.target.value)} placeholder="e.g. Inter" />
             </Field>
             <Field label="Logo URL" htmlFor="dl-logo" hint="PNG/JPEG renders in creatives; SVG shows here only.">
-              <Input id="dl-logo" value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://…/logo.png" />
+              <Input
+                id="dl-logo"
+                value={logoUrl}
+                onChange={(e) => {
+                  setLogoUrl(e.target.value);
+                  setLogoError(false);
+                }}
+                placeholder="https://…/logo.png"
+              />
+              {logoUrl.trim() && (
+                <div className="mt-2 flex items-center gap-3">
+                  <div
+                    className="flex h-14 w-24 shrink-0 items-center justify-center overflow-hidden border border-border"
+                    style={
+                      logoBackground === "white"
+                        ? { background: "#ffffff" }
+                        : {
+                            backgroundColor: "#2a2a2a",
+                            backgroundImage:
+                              "linear-gradient(45deg,#3a3a3a 25%,transparent 25%),linear-gradient(-45deg,#3a3a3a 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#3a3a3a 75%),linear-gradient(-45deg,transparent 75%,#3a3a3a 75%)",
+                            backgroundSize: "12px 12px",
+                            backgroundPosition: "0 0,0 6px,6px -6px,-6px 0",
+                          }
+                    }
+                  >
+                    {logoError ? (
+                      <span className="px-1 text-center text-[10px] text-ink-3">no preview</span>
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element -- preview of a remote logo
+                      <img
+                        src={logoUrl.trim()}
+                        alt="Logo preview"
+                        className="max-h-full max-w-full object-contain"
+                        onError={() => setLogoError(true)}
+                        onLoad={() => setLogoError(false)}
+                      />
+                    )}
+                  </div>
+                  <Select
+                    aria-label="Logo background"
+                    value={logoBackground}
+                    onChange={(e) => setLogoBackground(e.target.value as LogoBackground)}
+                  >
+                    <option value="white">White background</option>
+                    <option value="transparent">Transparent</option>
+                  </Select>
+                </div>
+              )}
             </Field>
             <Field label="Tone" htmlFor="dl-tone">
               <Input id="dl-tone" value={tone} onChange={(e) => setTone(e.target.value)} placeholder="e.g. clinical-reassuring" />

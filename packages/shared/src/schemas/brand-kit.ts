@@ -32,8 +32,16 @@ export const BrandFonts = z.object({
 });
 export type BrandFonts = z.infer<typeof BrandFonts>;
 
+/** How the logo sits on a creative: on a white chip (safe on any background, the
+ *  default) or placed transparently (for logos that already read well untreated). */
+export const LogoBackground = z.enum(["white", "transparent"]);
+export type LogoBackground = z.infer<typeof LogoBackground>;
+
 export const BrandKit = z.object({
   logo_url: z.string().url().nullable(),
+  /** Logo treatment on rendered creatives. Defaults to "white" so legacy kits
+   *  (and partial auto-extraction) keep the existing white-chip behavior. */
+  logo_background: LogoBackground.default("white"),
   palette: BrandPalette.nullable(),
   fonts: BrandFonts.nullable(),
   /** e.g. "clinical-reassuring" */
@@ -45,6 +53,7 @@ export type BrandKit = z.infer<typeof BrandKit>;
 
 export const emptyBrandKit = (): BrandKit => ({
   logo_url: null,
+  logo_background: "white",
   palette: { primary: null, accent: null, neutral: null, text: null },
   fonts: { heading: null, body: null, heading_url: null, body_url: null },
   tone: null,

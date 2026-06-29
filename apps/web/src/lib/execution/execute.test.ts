@@ -26,6 +26,7 @@ const profile: ClientProfile = {
   price_positioning: "mid",
   brand_kit: {
     logo_url: null,
+    logo_background: "white",
     palette: null,
     fonts: null,
     tone: "clinical-reassuring",

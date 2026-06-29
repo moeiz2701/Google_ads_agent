@@ -41,23 +41,41 @@ export function CtaPill({
 }
 
 /**
- * Optional logo, rendered on a white "chip" so a dark or single-color logo stays
- * visible on any band (the common failure: a black logo on a dark overlay). The
- * chip hugs the logo because we size the <img> from the logo's intrinsic aspect
- * (Satori needs explicit width+height — both are always set, so it can't crash).
- * Renders nothing without a logo.
+ * Optional logo. Two treatments (`background`):
+ *  - "white" (default): on a white "chip" so a dark or single-color logo stays
+ *    visible on any band (the common failure: a black logo on a dark overlay).
+ *  - "transparent": placed untreated, for logos that already read well on the
+ *    creative (e.g. a light logo, or one with its own padding).
+ * The chip hugs the logo because we size the <img> from the logo's intrinsic
+ * aspect (Satori needs explicit width+height — both are always set, so it can't
+ * crash). Renders nothing without a logo.
  */
 export function LogoSlot({
   logo,
   maxHeight,
+  background = "white",
 }: {
   logo: { uri: string; width: number; height: number } | null | undefined;
   maxHeight: number;
+  background?: "white" | "transparent";
 }): ReactElement | null {
   if (!logo) return null;
   const aspect = logo.width > 0 && logo.height > 0 ? logo.width / logo.height : 3;
   const imgH = maxHeight;
   const imgW = Math.max(1, Math.round(maxHeight * Math.min(aspect, 6))); // cap ultra-wide
+  const img = (
+    // eslint-disable-next-line @next/next/no-img-element -- Satori element, not DOM
+    <img
+      src={logo.uri}
+      width={imgW}
+      height={imgH}
+      style={{ width: imgW, height: imgH, objectFit: "contain" }}
+      alt=""
+    />
+  );
+  if (background === "transparent") {
+    return <div style={{ display: "flex", alignSelf: "flex-start" }}>{img}</div>;
+  }
   const pad = Math.max(4, Math.round(maxHeight * 0.22));
   return (
     <div
@@ -72,14 +90,7 @@ export function LogoSlot({
         borderColor: "rgba(0,0,0,0.08)",
       }}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element -- Satori element, not DOM */}
-      <img
-        src={logo.uri}
-        width={imgW}
-        height={imgH}
-        style={{ width: imgW, height: imgH, objectFit: "contain" }}
-        alt=""
-      />
+      {img}
     </div>
   );
 }

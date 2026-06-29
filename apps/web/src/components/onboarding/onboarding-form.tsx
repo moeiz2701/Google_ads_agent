@@ -9,7 +9,7 @@ import type {
   DerivedProfile,
   PricePositioning,
 } from "@gaa/shared";
-import { BUSINESS_CATEGORY_GROUPS, COUNTRIES, DEFAULT_COUNTRY } from "@gaa/shared";
+import { BUSINESS_CATEGORY_GROUPS, DEFAULT_COUNTRY } from "@gaa/shared";
 import {
   Button,
   Card,
@@ -19,6 +19,8 @@ import {
   Select,
   Textarea,
 } from "@/components/ui/primitives";
+import { CountrySelect } from "./country-select";
+import { CityMultiSelect } from "./city-multi-select";
 
 // Sentinel <Select> value for the "type my own category" path.
 const CATEGORY_OTHER = "__other__";
@@ -58,8 +60,9 @@ export function OnboardingForm() {
   const [budgetType, setBudgetType] = useState<"daily" | "total">("daily");
   const [budgetAmount, setBudgetAmount] = useState("50");
   const [currency, setCurrency] = useState("USD");
-  // Target cities for ad serving; country scopes competitor discovery.
-  const [geo, setGeo] = useState("");
+  // Target cities for ad serving (picked from real data); country scopes
+  // competitor discovery and drives the city search.
+  const [cities, setCities] = useState<string[]>([]);
   const [country, setCountry] = useState(DEFAULT_COUNTRY);
 
   // Tier 2 (optional, high-leverage)
@@ -74,6 +77,8 @@ export function OnboardingForm() {
   const [personas, setPersonas] = useState("");
   const [tone, setTone] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
+  const [logoBackground, setLogoBackground] = useState<"white" | "transparent">("white");
+  const [logoError, setLogoError] = useState(false);
   const [palette, setPalette] = useState<Record<string, string>>({});
   const [headingFont, setHeadingFont] = useState("");
   const [bodyFont, setBodyFont] = useState("");
@@ -108,6 +113,7 @@ export function OnboardingForm() {
       setPersonas(arrayToCsv(r.derived.personas));
       setTone(r.brand_kit.tone ?? "");
       setLogoUrl(r.logo_url ?? "");
+      setLogoError(false);
       setHeadingFont(r.brand_kit.fonts?.heading ?? "");
       setBodyFont(r.brand_kit.fonts?.body ?? "");
       setPalette({
@@ -141,13 +147,14 @@ export function OnboardingForm() {
         amount: Number(budgetAmount),
         currency: currency.trim().toUpperCase() || "USD",
       },
-      geo: csvToArray(geo),
+      geo: cities,
       competitors: competitors ? csvToArray(competitors) : null,
       usp: usp.trim() || null,
       offer: offer.trim() || null,
       price_positioning: positioning || null,
       brand_kit: {
         logo_url: logoUrl.trim() || null,
+        logo_background: logoBackground,
         palette: {
           primary: hexOrNull(palette.primary ?? ""),
           accent: hexOrNull(palette.accent ?? ""),
@@ -183,7 +190,7 @@ export function OnboardingForm() {
       );
       return;
     }
-    if (csvToArray(geo).length === 0) {
+    if (cities.length === 0) {
       setError("Add at least one target city.");
       return;
     }
@@ -325,30 +332,27 @@ export function OnboardingForm() {
             />
           </Field>
           <Field
-            label="Target cities"
-            htmlFor="geo"
-            required
-            hint="Comma-separated cities where ads serve, e.g. Los Angeles, Pasadena"
-          >
-            <Input id="geo" value={geo} onChange={(e) => setGeo(e.target.value)} required />
-          </Field>
-          <Field
             label="Country"
             htmlFor="country"
             required
             hint="Scopes competitor ad discovery to same-market advertisers."
           >
-            <Select
+            <CountrySelect
               id="country"
               value={country}
-              onChange={(e) => setCountry(e.target.value)}
-            >
-              {COUNTRIES.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.name}
-                </option>
-              ))}
-            </Select>
+              onChange={(code) => {
+                setCountry(code);
+                setCities([]); // cities belong to the previously selected country
+              }}
+            />
+          </Field>
+          <Field
+            label="Target cities"
+            htmlFor="geo"
+            required
+            hint="Pick the cities where ads serve — type to search, click to add."
+          >
+            <CityMultiSelect id="geo" country={country} value={cities} onChange={setCities} />
           </Field>
           <Field label="Budget type" htmlFor="budgetType" required>
             <Select
@@ -458,7 +462,59 @@ export function OnboardingForm() {
               <Input id="tone" value={tone} onChange={(e) => setTone(e.target.value)} />
             </Field>
             <Field label="Logo URL" htmlFor="logo">
-              <Input id="logo" value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} />
+              <Input
+                id="logo"
+                value={logoUrl}
+                onChange={(e) => {
+                  setLogoUrl(e.target.value);
+                  setLogoError(false);
+                }}
+              />
+              {logoUrl.trim() && (
+                <div className="mt-2 flex items-center gap-3">
+                  {/* Preview reflects the chosen treatment: white chip vs a
+                      checkerboard so a transparent/light logo stays visible. */}
+                  <div
+                    className="flex h-16 w-28 shrink-0 items-center justify-center overflow-hidden border border-border"
+                    style={
+                      logoBackground === "white"
+                        ? { background: "#ffffff" }
+                        : {
+                            backgroundColor: "#2a2a2a",
+                            backgroundImage:
+                              "linear-gradient(45deg,#3a3a3a 25%,transparent 25%),linear-gradient(-45deg,#3a3a3a 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#3a3a3a 75%),linear-gradient(-45deg,transparent 75%,#3a3a3a 75%)",
+                            backgroundSize: "12px 12px",
+                            backgroundPosition: "0 0,0 6px,6px -6px,-6px 0",
+                          }
+                    }
+                  >
+                    {logoError ? (
+                      <span className="px-1 text-center text-[10px] text-muted">
+                        Couldn&apos;t load image
+                      </span>
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element -- preview of an arbitrary remote logo
+                      <img
+                        src={logoUrl.trim()}
+                        alt="Logo preview"
+                        className="max-h-full max-w-full object-contain"
+                        onError={() => setLogoError(true)}
+                        onLoad={() => setLogoError(false)}
+                      />
+                    )}
+                  </div>
+                  <Select
+                    aria-label="Logo background"
+                    value={logoBackground}
+                    onChange={(e) =>
+                      setLogoBackground(e.target.value as "white" | "transparent")
+                    }
+                  >
+                    <option value="white">White background</option>
+                    <option value="transparent">Transparent</option>
+                  </Select>
+                </div>
+              )}
             </Field>
             <Field label="Heading font" htmlFor="headingFont">
               <Input id="headingFont" value={headingFont} onChange={(e) => setHeadingFont(e.target.value)} />

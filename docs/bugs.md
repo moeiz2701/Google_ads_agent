@@ -4,9 +4,9 @@
 
 3. there should be option to have a tranaprent logo 
 
-. fonts are not being integrated in the display
+4. fonts are not being integrated in the display
 
-3. reserach on efficient llm generation and retrieval maybe by using RAG
+5. reserach on efficient llm generation and retrieval maybe by using RAG
 
 
 

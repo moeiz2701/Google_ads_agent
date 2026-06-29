@@ -53,7 +53,9 @@ class Settings(BaseSettings):
 
     # Pipeline knobs.
     max_corpus_size: int = 200
-    enrich_concurrency: int = 8
+    # Vision-enrichment fan-out. Raised to keep a ~60-ad live corpus inside the
+    # Node route's 180s timeout (each image-only Transparency ad is a vision call).
+    enrich_concurrency: int = 12
     # Discovery relevance funnel (live path only). The country filter keeps
     # same-market advertisers; the relevance gate drops off-topic ads. If fewer
     # than this many relevant ads survive, the live path raises an actionable

@@ -27,8 +27,10 @@ const serverSchema = z.object({
     .enum(["true", "false"])
     .default("false")
     .transform((v) => v === "true"),
-  // Max competitor ads to fetch/analyze per run (live path). Kept modest for cost.
-  ANALYSIS_MAX_ADS: z.coerce.number().int().positive().max(100).default(20),
+  // Max competitor ads to fetch/analyze per run (live path). ~60 gives a credible
+  // gap map + per-competitor depth (breadth-first across ≤15 advertisers); the
+  // longevity sort + relevance gate keep quality. Hard-capped at 100 for cost/latency.
+  ANALYSIS_MAX_ADS: z.coerce.number().int().positive().max(100).default(60),
 
   // AI background-image generation (Module 4 rendering). Provider-abstracted,
   // OFF by default — when "none" (or the key is missing) the renderer keeps its

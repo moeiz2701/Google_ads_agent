@@ -119,11 +119,13 @@ function root(profile: TemplateProps["profile"], extra: CSSProperties): CSSPrope
 }
 
 /** The brand logo for a copy column, or null when there's no logo / no room.
- *  Sized to the canvas and capped so it never dominates a small banner. */
+ *  Sized to the canvas and capped so it never dominates a small banner. The
+ *  treatment (white chip vs transparent) follows the client's brand-kit choice. */
 function logoNode(props: TemplateProps): ReactElement | null {
   if (!props.profile.showLogo || !props.logo) return null;
   const h = Math.max(16, Math.min(64, Math.round(props.profile.height * 0.14)));
-  return <LogoSlot logo={props.logo} maxHeight={h} />;
+  const background = props.brandKit?.logo_background ?? "white";
+  return <LogoSlot logo={props.logo} maxHeight={h} background={background} />;
 }
 
 // ── 1. split_image_left ─────────────────────────────────────────────────────
